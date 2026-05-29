@@ -14,9 +14,9 @@ import openpyxl
 import pandas as pd
 import plotly.express as px
 
-# import sidetable
+import df2tables
 from pandas.tseries.offsets import DateOffset
-from itables.streamlit import interactive_table
+# from itables.streamlit import interactive_table
 
 import _my_functions
 
@@ -73,6 +73,6 @@ df_from_excel = pd.read_excel(
     # usecols = "A,C,G,H,I,K",
     )
 # print(df_from_excel.info())
+df2tables.render(df_from_excel)
 
-# interactive_table(df_from_excel)
 sys.exit()
