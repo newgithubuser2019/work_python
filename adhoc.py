@@ -62,6 +62,7 @@ USERPROFILE = os.environ["USERPROFILE"]
 # file names
 # filename0 = USERPROFILE + "\\Documents\\Работа\\отчетность\\ежедневно\\накопительный отчет\\_промежуточный файл df_впк.xlsx"
 filename1 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Премирование\\!СМОТы, встречи, материалы\\!Аналитика\\своды по премиям\\ремаркетинг свод.xlsx"
+filename2 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\контакт\\126 отчет\\2026\\06\\126.xlsx"
 
 # sql_username = getpass.getuser()
 # sql_password = getpass.getpass(prompt="SQL password: ", stream=None)
@@ -91,8 +92,35 @@ df_from_excel = pd.read_excel(
 # query = "SELECT * FROM dbo.Termination_URPA"
 # df_arrow = cx.read_sql(conn, query, protocol='text', return_type='arrow')
 # df = df_arrow.to_pandas()
+prompt1 = "\nгод: "
+prompt2 = "\nмесяц: "
 
+inp1 = input(prompt1)
+inp2 = input(prompt2)
+
+# cutoff_termination_date = datetime.date(inp1 + "." + inp2 + ".05")
+cutoff_termination_date = datetime.date(int(inp1), int(inp2), 5)
+# print(cutoff_termination_date)
 # sys.exit()
+
+df_from_excel = pl.read_excel(
+    engine="openpyxl",
+    schema_overrides={
+        "Дата договора лизинга": pl.Date,
+        "Дата статуса": pl.Date,
+        "Дата расторжения": pl.Date,
+        "Дата изъятия": pl.Date
+        },
+    source=filename2,
+    sheet_name="126",
+    has_header=True
+    # columns="A:B"
+)
+df_from_excel = df_from_excel.drop("Статус ОС")
+df_from_excel = df_from_excel.filter(pl.col("Дата расторжения") <= cutoff_termination_date)
+df_from_excel = df_from_excel.sort(["Дата расторжения"], descending=True)
+print(df_from_excel.head())
+sys.exit()
 
 query = "SELECT * FROM dbo.Termination_URPA"
 df_from_sql = pl.read_database_uri(
