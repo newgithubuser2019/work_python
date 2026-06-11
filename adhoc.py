@@ -104,7 +104,7 @@ cutoff_termination_date = datetime.date(int(inp1), int(inp2), 5)
 # sys.exit()
 
 df_from_excel = pl.read_excel(
-    engine="openpyxl",
+    # engine="openpyxl",
     schema_overrides={
         "Дата договора лизинга": pl.Date,
         "Дата статуса": pl.Date,
