@@ -1,5 +1,6 @@
 # IMPORTS
 import datetime
+# import calendar
 import decimal
 import json
 import os
@@ -8,6 +9,7 @@ import re
 import shutil
 import sys
 from functools import reduce
+from dateutil.relativedelta import relativedelta
 
 import numpy as np
 import openpyxl
@@ -88,21 +90,101 @@ df_from_excel = pd.read_excel(
 """
 #df2tables.render(df_from_excel)
 
+# ------------------------------------------------------------------------------------------------------------------------------------------
+
 # conn = ""
 # query = "SELECT * FROM dbo.Termination_URPA"
 # df_arrow = cx.read_sql(conn, query, protocol='text', return_type='arrow')
 # df = df_arrow.to_pandas()
-prompt1 = "\nгод: "
-prompt2 = "\nмесяц: "
+
+prompt1 = "\nгод отчетного периода: "
+prompt2 = "\nмесяц отчетного периода: "
 
 inp1 = input(prompt1)
 inp2 = input(prompt2)
 
-# cutoff_termination_date = datetime.date(inp1 + "." + inp2 + ".05")
-cutoff_termination_date = datetime.date(int(inp1), int(inp2), 5)
+# ------------------------------------------------------------------ даты и периоды
+bonus_period = datetime.date(int(inp1), int(inp2), 1)
+# print(bonus_period.month)
+list_of_12_periods = []
+for i in range (1,13):
+    past_period = bonus_period - relativedelta(months=i)
+    # print(past_period)
+    # print(calendar.month_name[past_period.month])
+    list_of_12_periods.append("\'" + str(past_period) + "\'")
+# print(list_of_12_periods)
+previous_12_periods = ", ".join(list_of_12_periods)
+# print(previous_12_periods)
+cutoff_termination_date = datetime.date(int(inp1), int(inp2) + 1, 5)
 # print(cutoff_termination_date)
-# sys.exit()
 
+# ------------------------------------------------------------------ проверка базы договоров на наличие новых договоров
+query_p1 = "SELECT * FROM dbo.BONUSDogBase_python WHERE dogovor_period = "
+past_period = bonus_period - relativedelta(months=1)
+query_p2 = "\'" + str(past_period) + "\'"
+query = query_p1 + query_p2
+# print(query)
+df_from_sql = pl.read_database_uri(
+    uri=uri1,
+    query=query,
+    engine="connectorx",
+    # schema_overrides={
+        #"Год": pl.Int64,
+        #},
+    )
+print(df_from_sql.shape[0])
+
+if df_from_sql.shape[0] == 0:
+    print("Не загружены новые договоры / договоры с затертыми цепочками")
+
+if len(str(inp2)) == 2:
+    month = str(inp2)
+else:
+    month = "0" + str(inp2)
+filename = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\коэффициент расторжений\\" + str(inp1) + "\\" + month + "\\договоры\\договоры.xlsx"
+# print(filename)
+df_from_excel = pl.read_excel(
+    # engine="openpyxl",
+    schema_overrides={
+        "Дата удержания ": pl.Date,
+        "LoadDt": pl.Date,
+        "dogovor_period": pl.Date,
+        },
+    source=filename,
+    sheet_name="Лист1",
+    has_header=True
+    # columns="A:B"
+)
+# print(df_from_excel.head())
+df_rastorgnut = df_from_excel.filter((pl.col("Комментарий") == "расторжение"))
+df_new = df_from_excel.filter((pl.col("Комментарий") != "расторжение") | pl.col("Комментарий").is_null())
+# print(df_rastorgnut)
+
+# удаление расторгнутых договоров из базы
+rastorgn_dogovory = df_rastorgnut["Номер договора"].to_list()
+# print(rastorgn_dogovory)
+rastorgn_dogovory_query = []
+for i in rastorgn_dogovory:
+    rastorgn_dogovory_query.append("\'" + i + "\'")
+print(rastorgn_dogovory_query)
+
+query_p1 = "DELETE * FROM dbo.BONUSDogBase_python WHERE \'Номер договора\' in ("
+query_p2 = ", ".join(rastorgn_dogovory_query)
+query_p3 = ")"
+query = query_p1 + query_p2 + query_p3
+print(query)
+# Write data to the database
+df.write_database(
+    table_name="users",
+    connection=uri,
+    if_table_exists="append"
+)
+
+# загрузка новых договоров в базу
+
+sys.exit()
+
+# ------------------------------------------------------------------ обработка 126 отчета
 df_from_excel = pl.read_excel(
     # engine="openpyxl",
     schema_overrides={
@@ -120,14 +202,22 @@ df_from_excel = df_from_excel.drop("Статус ОС")
 df_from_excel = df_from_excel.filter(pl.col("Дата расторжения") <= cutoff_termination_date)
 df_from_excel = df_from_excel.sort(["Дата расторжения"], descending=True)
 print(df_from_excel.head())
-sys.exit()
 
-query = "SELECT * FROM dbo.Termination_URPA"
+# ------------------------------------------------------------------ загрузка 12 предыдущих периодов из базы договоров
+query_p1 = "SELECT * FROM dbo.BONUSDogBase_python WHERE dogovor_period in ("
+query_p2 = previous_12_periods
+query_p3 = ")"
+query = query_p1 + query_p2 + query_p3
+# print(query)
 df_from_sql = pl.read_database_uri(
     uri=uri1,
     query=query,
-    engine="connectorx"
+    engine="connectorx",
+    schema_overrides={
+        "Год": pl.Int64,
+        },
     )
+df_from_sql = df_from_sql.sort(["LoadDt"], descending=True)
 print(df_from_sql.head())
 # df2tables.render(df_from_sql)
 
