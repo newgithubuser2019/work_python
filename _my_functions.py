@@ -3,9 +3,23 @@
 import sys
 
 import openpyxl
-
+import webbrowser
+from itables import to_html_datatable
 
 # -------------------------------------------------------------------FUNCTIONS
+def view_itables_html(df):
+    html_page = to_html_datatable(
+        df,
+        pageLength=25, # set default page length
+        column_filters="header", # add column filters
+        dom="lrtip" # remove global searchbox
+        )
+    with open("datatable.html", "w") as f:
+        f.write(html_page)
+        file_path = f.name
+    #file_url = "file://" + file_path
+    webbrowser.open(file_path)
+
 def print_line(line_type):
     if line_type == "hyphens":
         print("\n------------------------------------------------------------------------------------------------------------------------")
@@ -750,67 +764,11 @@ def rawdata_po_itogam(inp0, inp1, inp2, inp3, inp4, openpyxl, USERPROFILE):
     # filename13 = USERPROFILE + "\\Documents\\Работа\\" + inp0 + "\\" + inp1 + "\\" + str(inp2) + "\\" + inp3 + "\\" + inp4 + "\\" + inp4a + "\\_исходные данные\\т-13\\служба по воспроизводству бройлеров.xlsx"
     filename13 = USERPROFILE + "\\Documents\\Работа\\" + inp0 + "\\" + inp1 + "\\" + str(inp2) + "\\" + inp3 + "\\" + inp4 + "\\_исходные данные\\т-13\\служба по воспроизводству бройлеров.xlsx"
 
-    """
-    # loading wb1
-    wb = openpyxl.load_workbook(filename)
-    ws = wb["Лист1"]
-    rowmax = ws.max_row + 1
-    print(rowmax)
-
-    for i in range(1, rowmax):
-        print("hello hello")
-        searchcell = str(ws.cell(row = i, column = 1).value)
-        searchcell_up = str(ws.cell(row = i-1, column = 1).value)
-        print(searchcell)
-        if searchcell == "7" or searchcell == "Производственный участок" or searchcell == "Ремонтно-эксплуатационный участок":
-            print("gotcha")
-            if "Цех" not in searchcell_up:
-                ws.insert_rows(i)
-                while True:
-                    for b in reversed(range(1, i)):
-                        searchstring = str(ws.cell(row = b, column = 1).value)
-                        if "Цех" in searchstring:
-                            # break
-                            ws.cell(row = i-1, column = 1).value = searchstring
-    print("hello world")
-    """
     # print(filename10)
     # print(filename11)
     print(filename12)
     print(filename13)
-    """
-    # loading wb10
-    wb10 = openpyxl.load_workbook(filename10)
-    wb10sh1 = wb10["Лист1"]
-    wb = wb10
-    ws = wb10sh1
-    # working with wb10
-    rowmax = ws.max_row + 1
-    for i in range(1, rowmax):
-        searchcell = str(ws.cell(row = i, column = 11).value)
-        if searchcell == "Итого по странице:":
-            # print("gotchaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            ws.delete_rows(i, 6)
-    # saving changes
-    wb.save(filename11)
-    print("saved filename11")
-    
-    # loading wb4
-    wb11 = openpyxl.load_workbook(filename11)
-    # print("\n" + filename11)
-    wb11sh1 = wb11["Лист1"]
-    wb = wb11
-    ws = wb11sh1
-    # working with wb11
-    rowmax = ws.max_row + 1
-    # print(rowmax)
-    val1 = int(ws.cell(row = rowmax - 1, column = 1).value)
-    # print(rowmax-1-19+1)
-    if (rowmax-1-19+1) != val1:
-        print("\nsomeone is missing in t-51")
-        print(filename11)
-        sys.exit()
-    """
+   
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # t-13
     # loading wb9
     wb9 = openpyxl.load_workbook(filename12)
@@ -917,16 +875,6 @@ def json_dump_n_load_2(json, inside_variable, json_filename, load_text, dict_nam
         except (FileNotFoundError, json.decoder.JSONDecodeError, KeyError) as e:
             while True:
                 try:
-                    """
-                    спросить = input(input_prompt)
-                    if int_or_float == "int":
-                        dict_name.setdefault(set_default_params_dump1, int(спросить))
-                    if int_or_float == "float":
-                        dict_name.setdefault(set_default_params_dump1, float(спросить))
-                    # 
-                    with open(json_filename, "w") as filehandle:
-                        json.dump(dict_name, filehandle)
-                    """
                     if тип == "list":
                         for k1, v1 in dict_name_2.items():
                             for set_default_params_dump1 in k1:
@@ -1045,39 +993,6 @@ def rawdata_plr(inp0, inp1, inp2, inp3, inp4, openpyxl, USERPROFILE):
     # print(filename11)
     print(filename12)
     print(filename13)
-    """
-    # loading wb10
-    wb10 = openpyxl.load_workbook(filename10)
-    wb10sh1 = wb10["Лист1"]
-    wb = wb10
-    ws = wb10sh1
-    # working with wb10
-    rowmax = ws.max_row + 1
-    for i in range(1, rowmax):
-        searchcell = str(ws.cell(row = i, column = 11).value)
-        if searchcell == "Итого по странице:":
-            # print("gotchaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            ws.delete_rows(i, 6)
-    # saving changes
-    wb.save(filename11)
-    print("saved filename11")
-    
-    # loading wb4
-    wb11 = openpyxl.load_workbook(filename11)
-    # print("\n" + filename11)
-    wb11sh1 = wb11["Лист1"]
-    wb = wb11
-    ws = wb11sh1
-    # working with wb11
-    rowmax = ws.max_row + 1
-    # print(rowmax)
-    val1 = int(ws.cell(row = rowmax - 1, column = 1).value)
-    # print(rowmax-1-19+1)
-    if (rowmax-1-19+1) != val1:
-        print("\nsomeone is missing in t-51")
-        print(filename11)
-        sys.exit()
-    """
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # t-13
     # loading wb9
     wb9 = openpyxl.load_workbook(filename12)
@@ -1390,225 +1305,6 @@ def БФС_подразделения(dataframe_list):
                     pass
                 break
         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        """
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Служба по воспроизводству бройлеров
-        list1 = df_from_excel[df_from_excel["должность"]=="Служба по воспроизводству бройлеров"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Ветеринарная служба":
-                        df_from_excel.подразд.iloc[i] = "воспроизводство"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Служба по выращиванию бройлеров
-        list1 = df_from_excel[df_from_excel["должность"]=="Служба по выращиванию бройлеров"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Ветеринарная служба":
-                        df_from_excel.подразд.iloc[i] = "выращивание"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Автотранспортная служба
-        list1 = df_from_excel[df_from_excel["должность"]=="Автотранспортная служба"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Автотранспортная колонна № 1":
-                        df_from_excel.подразд.iloc[i] = "автотранспортная служба"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Отдел качества
-        list1 = df_from_excel[df_from_excel["должность"]=="Отдел качества"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Ветеринарная лаборатория":
-                        df_from_excel.подразд.iloc[i] = "отдел качества"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Птицеперерабатывающий комплекс
-        list1 = df_from_excel[df_from_excel["должность"]=="Птицеперерабатывающий комплекс"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Административно-хозяйственный отдел":
-                        df_from_excel.подразд.iloc[i] = "ППК"
-                        df_from_excel.подразд.iloc[i+1] = np.nan
-                        df_from_excel.подразд.iloc[i+2] = np.nan
-                        df_from_excel.ОП.iloc[i+1] = "Административно-хозяйственный отдел"
-                        df_from_excel.ОП.iloc[i+2] = "Административно-хозяйственный отдел"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Инженерно-техническая служба
-        list1 = df_from_excel[df_from_excel["должность"]=="Инженерно-техническая служба"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Служба продаж":
-                        df_from_excel.подразд.iloc[i] = "инженерно-техническая служба"
-                except IndexError:
-                    print(i)
-                break
-        # 
-        list1 = df_from_excel[df_from_excel["должность"]=="Инженерно-техническая служба"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Газовая служба":
-                        df_from_excel.подразд.iloc[i] = "инженерно-техническая служба"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # кормопроизводственный комплекс и ппк
-        list1 = df_from_excel[df_from_excel["должность"]=="Инженерно-техническая служба"].index.values
-        # print(list1)
-        # print(df_from_excel.должность.iloc[102])
-        # for i in list1:
-        while True:
-            try:
-                for i in list1:
-                    # print(i)
-                    # print(df_from_excel.должность.iloc[i+1])
-                    if df_from_excel.должность.iloc[i+2] == "Отдел главного энергетика" or df_from_excel.должность.iloc[i+2] == "Механик":
-                        df_from_excel.ОП.iloc[i] = "КК, Инженерно-техническая служба"
-                        df_from_excel.участок.iloc[i] = "КК, Инженерно-техническая служба"
-                        df_from_excel.ОП.iloc[i+1] = "КК, Инженерно-техническая служба"
-                        df_from_excel.участок.iloc[i+1] = "КК, Инженерно-техническая служба"
-                    if df_from_excel.должность.iloc[i+1] == "Отдел главного механика":
-                        df_from_excel.ОП.iloc[i] = np.nan
-                        df_from_excel.цех.iloc[i+1] = "ИТС, Отдел главного механика"
-                    if df_from_excel.должность.iloc[i+2] == "Отдел автоматизированных систем управления" or df_from_excel.должность.iloc[i+2] == "Главный инженер":
-                        df_from_excel.ОП.iloc[i] = "ППК, Инженерно-техническая служба"
-                        df_from_excel.участок.iloc[i] = "ППК, Инженерно-техническая служба"
-                        df_from_excel.ОП.iloc[i+1] = "ППК, Инженерно-техническая служба"
-                        df_from_excel.участок.iloc[i+1] = "ППК, Инженерно-техническая служба"
-            except IndexError:
-                # print(i)
-                pass
-            break
-        # sys.exit()
-        # 
-        list1 = df_from_excel[df_from_excel["должность"]=="Отдел главного энергетика"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Котельная":
-                        if df_from_excel.должность.iloc[i-1] == "Главный инженер" or df_from_excel.должность.iloc[i-1] == "Инженерно-техническая служба":
-                            df_from_excel.цех.iloc[i] = "Отдел главного энергетика"
-                        if df_from_excel.должность.iloc[i-1] == "Слесарь-ремонтник" or df_from_excel.должность.iloc[i-1] == "Отдел главного механика":
-                            df_from_excel.цех.iloc[i] = "ИТС, Отдел главного энергетика"
-                    
-                    # if df_from_excel.должность.iloc[i+1] == "Главный энергетик" or df_from_excel.должность.iloc[i+1] == "Участок водоснабжения и водоотведения":
-                        # if df_from_excel.должность.iloc[i-1] == "Оператор котельной" or df_from_excel.должность.iloc[i-1] == "Котельная":
-                            # df_from_excel.цех.iloc[i] = "ИТС, Отдел главного энергетика"
-                    # if df_from_excel.должность.iloc[i+1] == "Главный энергетик" or df_from_excel.должность.iloc[i+1] == "Участок контрольно-измерительных приборов и автоматики":
-                        # if df_from_excel.должность.iloc[i-1] == "Оператор котельной" or df_from_excel.должность.iloc[i-1] == "Котельная":
-                            # df_from_excel.цех.iloc[i] = "Отдел главного энергетика"
-                    
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Служба безопасности
-        list1 = df_from_excel[df_from_excel["должность"]=="Служба безопасности"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Отдел внутреннего контроля":
-                        df_from_excel.подразд.iloc[i] = "служба безопасности"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Служба продаж
-        list1 = df_from_excel[df_from_excel["должность"]=="Служба продаж"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Магазин \"Поляна\"":
-                        df_from_excel.подразд.iloc[i] = "служба продаж"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Кормопроизводственный цех
-        list1 = df_from_excel[df_from_excel["должность"]=="Кормопроизводственный цех"].index.values
-        # print(list1)
-        for i in list1:
-            while True:
-                try:
-                    # print(df_from_excel.должность.iloc[i+1])
-                    if df_from_excel.должность.iloc[i+1] == "Начальник цеха" or df_from_excel.должность.iloc[i+1] == "Участок по производству комбикормов":
-                        if df_from_excel.должность.iloc[i-1] == "Весовщик" or df_from_excel.должность.iloc[i-1] == "Весовая":
-                            df_from_excel.ОП.iloc[i] = "Кормопроизводственный цех"
-                            df_from_excel.участок.iloc[i] = "Кормопроизводственный цех"
-                    if df_from_excel.должность.iloc[i+1] == "Весовая":
-                        if df_from_excel.должность.iloc[i-1] == "Помощник руководителя" or df_from_excel.должность.iloc[i-1] == "Кормопроизводственный комплекс":
-                            df_from_excel.ОП.iloc[i] = "Кормопроизводственный цех"
-                            df_from_excel.цех.iloc[i] = ""
-                            df_from_excel.участок.iloc[i] = "Кормопроизводственный цех"
-                    if df_from_excel.должность.iloc[i+1] == "Весовая":
-                        if df_from_excel.должность.iloc[i-1] == "Начальник производства" or df_from_excel.должность.iloc[i-1] == "Комбикормовое производство \"Шебекинское\"":
-                            df_from_excel.ОП.iloc[i] = np.nan
-                            df_from_excel.цех.iloc[i] = "Кормопроизводственный цех"
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Кормопроизводственный комплекс
-        list1 = df_from_excel[df_from_excel["должность"]=="Кормопроизводственный комплекс"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Административно-хозяйственный отдел":
-                        df_from_excel.подразд.iloc[i] = "кормопроизводство"
-                        df_from_excel.подразд.iloc[i+1] = np.nan
-                        df_from_excel.подразд.iloc[i+2] = np.nan
-                        df_from_excel.ОП.iloc[i+1] = "Административно-хозяйственный отдел"
-                        df_from_excel.ОП.iloc[i+2] = "Административно-хозяйственный отдел"
-                except IndexError:
-                    print(i)
-                break
-        # Производственно-техническая лаборатория
-        list1 = df_from_excel[df_from_excel["должность"]=="Производственно-техническая лаборатория"].index.values
-        for i in list1:
-            while True:
-                try:
-                    if df_from_excel.должность.iloc[i+1] == "Лаборант 1-й категории" or df_from_excel.должность.iloc[i+1] == "Элеваторный участок":
-                        if df_from_excel.должность.iloc[i-1] == "Оператор пульта управления" or df_from_excel.должность.iloc[i-1] == "Участок по производству комбикормов":
-                            df_from_excel.ОП.iloc[i] = np.nan
-                except IndexError:
-                    print(i)
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        """
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        """
-        print("\ndf_from_excel")
-        # df_from_excel = df_from_excel.drop(["tabnumfio"], axis = 1)
-        # df_from_excel = df_from_excel.drop(["дата_приёма"], axis = 1)
-        # df_from_excel = df_from_excel.drop(["дата_уволн"], axis = 1)
-        # 
-        df_from_excel = df_from_excel.drop(["ссч"], axis = 1)
-        df_from_excel = df_from_excel.drop(["средн_зп"], axis = 1)
-        df_from_excel = df_from_excel.drop(["результ"], axis = 1)
-        df_from_excel = df_from_excel.drop(["текуч_1С"], axis = 1)
-        print(df_from_excel)
-        sys.exit()
-        """
         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
         df_from_excel["ОП"] = df_from_excel["ОП"].fillna(method="ffill")
         df_from_excel["цех"] = df_from_excel["цех"].fillna(method="ffill")
@@ -1652,53 +1348,7 @@ def БФС_подразделения(dataframe_list):
 
         df_from_excel.loc[df_from_excel["цех"] != "", ["подразд2"]] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
         df_from_excel.loc[df_from_excel["цех"] == df_from_excel["участок"], ["подразд2"]] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"] + ", " + df_from_excel["цех"]
-        """
-        df_from_excel.loc[df_from_excel["цех"].str.contains("Цех"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"].str.contains("цех"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"].str.contains("Служба главного механика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"].str.contains("Служба главного энергетика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"].str.contains("Отдел главного энергетика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"].str.contains("Отдел главного механика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        """
-        # 
-        """
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains("Отдел главного энергетика, Ремонтно-механический участок"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба продаж"), ["подразд2"]] = "Служба продаж"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба охраны труда"), ["подразд2"]] = "Служба охраны труда"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба закупок"), ["подразд2"]] = "Служба закупок"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Административный отдел"), ["подразд2"]] = "Административный отдел"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба безопасности"), ["подразд2"]] = "Служба безопасности"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел экологии"), ["подразд2"]] = "Отдел экологии"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел капитального строительства"), ["подразд2"]] = "Отдел капитального строительства"
-        # df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Газовая служба"), ["подразд2"]] = "Газовая служба"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел по работе с персоналом"), ["подразд2"]] = "Отдел по работе с персоналом"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба главного энергетика, Служба главного энергетика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"]
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба главного механика, Служба главного механика"), ["подразд2"]] = df_from_excel["ОП"] + ", " + df_from_excel["цех"]
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Цех технических фабрикатов"), ["подразд2"]] = "Цех технических фабрикатов"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Цех глубокой переработки"), ["подразд2"]] = "Цех глубокой переработки"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Фельдшерская служба"), ["подразд2"]] = "Фельдшерская служба"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба ветеринарно-санитарного контроля"), ["подразд2"]] = "Служба ветеринарно-санитарного контроля"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Склад товарно-материальных ценностей"), ["подразд2"]] = "Склад товарно-материальных ценностей"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Склад готовой продукции"), ["подразд2"]] = "Склад готовой продукции"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Птицеперерабатывающий цех"), ["подразд2"]] = "Птицеперерабатывающий цех"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел складского хозяйства"), ["подразд2"]] = "Отдел складского хозяйства"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Инженерно-техническая служба"), ["подразд2"]] = "Инженерно-техническая служба"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Административно-хозяйственный отдел"), ["подразд2"]] = "Административно-хозяйственный отдел"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Птицеперерабатывающий комплекс"), ["подразд2"]] = "Птицеперерабатывающий комплекс"
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Централизованная сервисная служба"), ["подразд2"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains("Отдел производственного учета"), ["подразд2"]] = "Отдел производственного учета"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба по выращиванию бройлеров"), ["подразд2"]] = "Служба по выращиванию бройлеров"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел качества"), ["подразд2"]] = "Отдел качества"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Центральный склад"), ["подразд2"]] = "Центральный склад"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Ремонтная служба"), ["подразд2"]] = "Ремонтная служба"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел эксплуатации"), ["подразд2"]] = "Отдел эксплуатации"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Отдел безопасности дорожного движения"), ["подразд2"]] = "Отдел безопасности дорожного движения"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Автотранспортная служба"), ["подразд2"]] = df_from_excel["ОП"]
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба подготовки корпусов"), ["подразд2"]] = "Служба подготовки корпусов"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Ветеринарная служба"), ["подразд2"]] = "Ветеринарная служба"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Служба по воспроизводству бройлеров"), ["подразд2"]] = "Служба по воспроизводству бройлеров"
-        df_from_excel.loc[df_from_excel["подразд2"].str.contains(", Администрация"), ["подразд2"]] = "Администрация"
-        """
+        
         df_from_excel["ОП"] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"]
         # print("\ndf_from_excel")
         # print(df_from_excel)
