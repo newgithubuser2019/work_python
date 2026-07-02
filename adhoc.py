@@ -2,6 +2,7 @@
 import datetime
 import decimal
 import json
+# import math
 import os
 import pprint
 import re
@@ -10,7 +11,6 @@ import sys
 from functools import reduce
 
 import connectorx as cx
-
 # import df2tables
 import mssql_python
 import numpy as np
@@ -19,10 +19,9 @@ import pandas as pd
 import plotly.express as px
 import polars as pl
 from dateutil.relativedelta import relativedelta
-
 # from itables.streamlit import interactive_table
 from pandas.tseries.offsets import DateOffset
-from sqlalchemy import create_engine
+# from sqlalchemy import create_engine
 
 import _my_functions
 
@@ -133,10 +132,11 @@ df_from_sql = pl.read_database_uri(
         #"Год": pl.Int64,
         #},
     )
-print(df_from_sql.shape[0])
+# print(df_from_sql.shape[0])
 
+# ------------------------------------------------------------------ удаление и загрузка в базу
 if df_from_sql.shape[0] == 0:
-    # print("Не загружены новые договоры / договоры с затертыми цепочками")
+    # print("\nНе загружены новые договоры / договоры с затертыми цепочками")
 
     if len(str(inp2)) == 2:
         month = str(inp2)
@@ -162,20 +162,19 @@ if df_from_sql.shape[0] == 0:
     df_new = df_from_excel.filter((pl.col("Комментарий") != "расторжение") | pl.col("Комментарий").is_null())
     # print(df_rastorgnut)
 
-    # удаление расторгнутых договоров из базы
+    # ------------------------------------------------------------------ удаление расторгнутых договоров из базы
     rastorgn_dogovory = df_rastorgnut["Номер договора"].to_list()
     # print(rastorgn_dogovory)
     rastorgn_dogovory_query = []
     for i in rastorgn_dogovory:
         rastorgn_dogovory_query.append("N" + "\'" + i + "\'")
-    print(rastorgn_dogovory_query)
+    # print(rastorgn_dogovory_query)
 
     query_p1 = "DELETE FROM dbo.BONUSDogBase_python WHERE [Номер договора] in ("
     query_p2 = ", ".join(rastorgn_dogovory_query)
     query_p3 = ")"
     query = query_p1 + query_p2 + query_p3
-    print(query)
-    # query = "SELECT * FROM dbo.BONUSDogBase_python"
+    # print(query)
 
     # apache arrow adbc
     """
@@ -189,51 +188,15 @@ if df_from_sql.shape[0] == 0:
 
     # mssql-python
     conn_str = "Server=vls-sql-zup-dev,1433;Database=HR_CAB;Trusted_connection=yes;TrustServerCertificate=yes"
-    # conn = mssql_python.connect(conn_str)
-    
     with mssql_python.connect(conn_str) as conn:
         with conn.cursor() as cur:
             cur.execute(query)
             conn.commit()
-            print("Rows deleted:", cur.rowcount)
+            print("\nRows deleted:", cur.rowcount)
     print("Удалены договоры, по которым затерты цепочки")
 
-    # загрузка новых договоров в базу
-    newdict = {}
-    columns_list = []
-    values_list = []
-    for i in range(0, df_from_excel.shape[0]):
-    # for i in range(0, 1):
-        print(i)
-        df_row_list = list(df_from_excel.row(i))
-        for y in range(0, len(df_row_list)):
-            newdict.setdefault(df_from_excel.columns[y], df_row_list[y])
-        for k, v in newdict.items():
-            if isinstance(v, str):
-                v = "N" + "\'" + v + "\'"
-                newdict[k] = v
-            if v is None:
-                v = "NULL"
-                newdict[k] = v
-            if isinstance(v, datetime.date):
-                v = "\'" + str(v) + "\'"
-                newdict[k] = v
-            columns_list.append("["+str(k)+"]")
-            values_list.append(str(v))
-        # pprint.pprint(newdict)
-        # print(values_list)
-        for a, b in zip(columns_list, values_list):
-            columns_str = ", ".join(columns_list)
-            values_str = ", ".join(values_list)
-        # print(columns_str)
-        # print(values_str)
-        query = "INSERT INTO dbo.BONUSDogBase_python (" + columns_str + ")\nVALUES (" + values_str + ")"
-        # print(query)
-        newdict = {}
-        columns_list = []
-        values_list = []
-
-    sys.exit()
+    # ------------------------------------------------------------------ загрузка новых договоров в базу
+    """
     inp3 = input(prompt3)
     if inp3.lower() == "да":
         pass
@@ -242,6 +205,7 @@ if df_from_sql.shape[0] == 0:
         sys.exit()
     # print(df_from_excel.shape[0])
     # print(df_from_excel)
+    """
 
     # apache arrow adbc
     """
@@ -273,7 +237,54 @@ if df_from_sql.shape[0] == 0:
             # connection.commit()
     print("Загружены договоры с затертыми цепочками и новые договоры")
     """
-    sys.exit()
+
+    # mssql-python
+    newdict = {}
+    columns_list = []
+    values_list = []
+    valstr = ""
+    
+    for start, end in _my_functions.generate_subranges(df_from_excel.shape[0], chunk_size=1000):
+        # print(f"Subrange from {start} to {end}")
+        for i in range(start, end):
+            df_row_list = list(df_from_excel.row(i))
+            for y in range(0, len(df_row_list)):
+                newdict.setdefault(df_from_excel.columns[y], df_row_list[y])
+            for k, v in newdict.items():
+                if isinstance(v, str):
+                    v = "N" + "\'" + v + "\'"
+                    newdict[k] = v
+                if v is None:
+                    v = "NULL"
+                    newdict[k] = v
+                if isinstance(v, datetime.date):
+                    v = "\'" + str(v) + "\'"
+                    newdict[k] = v
+                columns_list.append("["+str(k)+"]")
+                values_list.append(str(v))
+            # pprint.pprint(newdict)
+            # print(values_list)
+            for a, b in zip(columns_list, values_list):
+                columns_str = ", ".join(columns_list)
+                values_str_temp = ", ".join(values_list)
+            # print(columns_str)
+            # print(values_str_temp)
+            valstr += "\n   (" + values_str_temp + "),"
+            newdict = {}
+            columns_list = []
+            values_list = []
+        query = "INSERT INTO dbo.BONUSDogBase_python (" + columns_str + ")\nVALUES" + valstr
+        query = query[:-1] + ";"
+        valstr = ""
+        # print(query)
+        with mssql_python.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                conn.commit()
+                print("\nRows inserted:", cur.rowcount)
+            print("Загружены договоры с затертыми цепочками и новые договоры")
+
+# sys.exit()
 
 # ------------------------------------------------------------------ обработка 126 отчета
 df_from_excel = pl.read_excel(
@@ -314,4 +325,6 @@ df_from_sql = df_from_sql.sort(["LoadDt"], descending=True)
 print(df_from_sql.head())
 # df2tables.render(df_from_sql)
 
-sys.exit()
+# sys.exit()
+
+# ------------------------------------------------------------------ добавление СНИЛС из базы demography
