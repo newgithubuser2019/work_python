@@ -7,7 +7,7 @@ import os
 # import pprint
 # import re
 # import shutil
-# import sys
+import sys
 from functools import reduce
 
 import connectorx as cx
@@ -72,6 +72,7 @@ mssql_python_uri_1 = "Server=vls-sql-zup-dev,1433;Database=HR_CAB;Trusted_connec
 # ------------------------------------------------------------------ даты и периоды
 bonus_period = datetime.date(int(inp1), int(inp2), 1)
 # print(bonus_period.month)
+# print(bonus_period)
 list_of_12_periods = []
 for i in range (1,13):
     past_period = bonus_period - relativedelta(months=i)
@@ -100,7 +101,7 @@ df_from_sql = pl.read_database_uri(
     )
 # print(df_from_sql.shape[0])
 
-# ------------------------------------------------------------------ удаление и загрузка в базу
+# ------------------------------------------------------------------ выборка расторгнутых договоров
 if df_from_sql.shape[0] == 0:
     # print("\nНе загружены новые договоры / договоры с затертыми цепочками")
 
@@ -118,7 +119,7 @@ if df_from_sql.shape[0] == 0:
     )
     # print(df_from_excel.head())
     df_rastorgnut = df_from_excel.filter((pl.col("Комментарий") == "расторжение"))
-    df_new = df_from_excel.filter((pl.col("Комментарий") != "расторжение") | pl.col("Комментарий").is_null())
+    # df_new = df_from_excel.filter((pl.col("Комментарий") != "расторжение") | pl.col("Комментарий").is_null())
     # print(df_rastorgnut)
 
     # ------------------------------------------------------------------ удаление расторгнутых договоров из базы
@@ -247,7 +248,7 @@ if df_from_sql.shape[0] == 0:
 # sys.exit()
 
 # ------------------------------------------------------------------ обработка 126 отчета
-df_from_excel = pl.read_excel(
+df_126 = pl.read_excel(
     # engine="openpyxl",
     schema_overrides={
         "Дата договора лизинга": pl.Date,
@@ -260,10 +261,10 @@ df_from_excel = pl.read_excel(
     has_header=True
     # columns="A:B"
 )
-df_from_excel = df_from_excel.drop("Статус ОС")
-df_from_excel = df_from_excel.filter(pl.col("Дата расторжения") <= cutoff_termination_date)
-df_from_excel = df_from_excel.sort(["Дата расторжения"], descending=True)
-print(df_from_excel.head())
+df_126 = df_126.drop("Статус ОС")
+df_126 = df_126.filter(pl.col("Дата расторжения") <= cutoff_termination_date)
+df_126 = df_126.sort(["Дата расторжения"], descending=True)
+print(df_126.head())
 
 # df2tables.render(df_from_excel)
 # _my_functions.view_itables_html(df=df_from_excel)
@@ -274,7 +275,7 @@ query_p2 = previous_12_periods
 query_p3 = ")"
 query = query_p1 + query_p2 + query_p3
 # print(query)
-df_from_sql = pl.read_database_uri(
+df_dogovory_wide = pl.read_database_uri(
     uri=polars_uri_1,
     query=query,
     engine="connectorx",
@@ -282,11 +283,86 @@ df_from_sql = pl.read_database_uri(
         "Год": pl.Int64,
         },
     )
-df_from_sql = df_from_sql.sort(["LoadDt"], descending=True)
-print(df_from_sql.head())
-# df2tables.render(df_from_sql)
+df_dogovory_wide = df_dogovory_wide.with_columns(
+    pl.when(pl.col("Основной менеджер продаж") == pl.col("Д регионы"))
+    .then(pl.lit("личные продажи ДРП"))
+    .otherwise(pl.lit("продажи менеджеров"))
+    .alias("Кто продал")
+)
+df_dogovory_wide = df_dogovory_wide.sort(["LoadDt"], descending=True)
+# _my_functions.view_itables_html(df=df_dogovory_wide)
+# print(df_dogovory_wide.head())
+# print(df_dogovory_wide.columns)
 
+# ------------------------------------------------------------------ wide to long
+df_dogovory_long = df_dogovory_wide.unpivot(
+    index=["Номер договора", "Кто продал"], 
+    on=['Основной менеджер продаж', 'ГМ', 'РГ', 'НО', 'ДД Москва/УСС', 'Д регионы', 'ТД', 'РД', 'НУ'], 
+    variable_name="Должность", 
+    value_name="ФИО"
+)
+df_dogovory_long = df_dogovory_long.sort(["Номер договора"], descending=False)
+# _my_functions.view_itables_html(df=df_dogovory_long)
 # sys.exit()
 
-# ------------------------------------------------------------------ добавление СНИЛС из базы demography
-# [dbo].[Demography_report_hist]
+# ------------------------------------------------------------------ загрузка из базы demography
+query = "SELECT * FROM [dbo].[Demography_report_hist] WHERE Repdt > " + list_of_12_periods[-1] + " AND Repdt < " + "\'" + str(bonus_period) + "\'"
+# print(query)
+df_demography = pl.read_database_uri(
+    uri=polars_uri_1,
+    query=query,
+    engine="connectorx",
+    schema_overrides={
+        "Год": pl.Int64,
+        },
+    )
+# df_demography = df_demography.with_columns((pl.col("Last_name_local") + " " + pl.col("First_name_local") + " " + pl.col("Middle_name_local")).alias("ФИО полное"))
+
+df_demography = df_demography.with_columns(
+    pl.when(pl.col("Middle_name_local").is_null())
+    .then(pl.col("Last_name_local") + " " + pl.col("First_name_local"))
+    .otherwise(pl.col("Last_name_local") + " " + pl.col("First_name_local") + " " + pl.col("Middle_name_local"))
+    .alias("ФИО полное")
+)
+df_demography = df_demography.unique(subset=["ФИО полное"])
+
+# print(df_demography.head())
+# _my_functions.view_itables_html(df=df_demography)
+
+# ------------------------------------------------------------------ добавление статуса договора и СНИЛС
+df_dogovory_long = df_dogovory_long.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
+df_dogovory_long = df_dogovory_long.join(df_demography, left_on="ФИО", right_on="ФИО полное", how="left")
+df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "Social_number")
+# df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
+# df2tables.render(df_dogovory_long)
+# _my_functions.view_itables_html(df=df_dogovory_long)
+
+# ------------------------------------------------------------------ расчет коэфф расторжений
+df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == "продажи менеджеров").group_by(["Social_number"]).agg(
+    pl.col("Номер договора").count().alias("всего договоров")
+)
+print(df_vsego)
+summa = df_vsego["всего договоров"].sum()
+print("Всего договоров " + str(summa))
+
+df_rastorgn = df_dogovory_long.filter((pl.col("Кто продал") == "продажи менеджеров") & (pl.col("Статус договора лизинга") == "Расторгнут") ).group_by(["Social_number"]).agg(
+    pl.col("Номер договора").count().alias("расторгнутых договоров")
+)
+print(df_rastorgn)
+summa = df_rastorgn["расторгнутых договоров"].sum()
+print("Расторгнутых договоров " + str(summa))
+
+df_result = df_vsego.join(df_rastorgn, on="Social_number", how="left")
+df_result = df_result.with_columns(
+    pl.when(pl.col("расторгнутых договоров").is_null())
+    .then(pl.lit(0))
+    .otherwise(pl.col("расторгнутых договоров"))
+    .alias("расторгнутых договоров")
+)
+print(df_result)
+summa = df_result["всего договоров"].sum()
+print("Всего договоров " + str(summa))
+summa = df_result["расторгнутых договоров"].sum()
+print("Расторгнутых договоров " + str(summa))
+
+# sys.exit()
