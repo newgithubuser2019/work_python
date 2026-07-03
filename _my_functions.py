@@ -21,7 +21,8 @@ def view_itables_html(df):
     itables.options.warn_on_undocumented_option=False
     html_page = to_html_datatable(
         df,
-        pageLength=25, # set default page length
+        maxBytes=0, # disable downsampling
+        pageLength=50, # set default page length
         column_filters="header", # add column filters
         dom="lrtip" # remove global searchbox
         )
