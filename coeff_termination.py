@@ -334,35 +334,56 @@ df_dogovory_long = df_dogovory_long.join(df_126, left_on="Номер догов�
 df_dogovory_long = df_dogovory_long.join(df_demography, left_on="ФИО", right_on="ФИО полное", how="left")
 df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "Social_number")
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
+
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
 
 # ------------------------------------------------------------------ расчет коэфф расторжений
-df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == "продажи менеджеров").group_by(["Social_number"]).agg(
-    pl.col("Номер договора").count().alias("всего договоров")
-)
-print(df_vsego)
-summa = df_vsego["всего договоров"].sum()
-print("Всего договоров " + str(summa))
+df_koeff = pl.DataFrame([])
 
-df_rastorgn = df_dogovory_long.filter((pl.col("Кто продал") == "продажи менеджеров") & (pl.col("Статус договора лизинга") == "Расторгнут") ).group_by(["Social_number"]).agg(
-    pl.col("Номер договора").count().alias("расторгнутых договоров")
-)
-print(df_rastorgn)
-summa = df_rastorgn["расторгнутых договоров"].sum()
-print("Расторгнутых договоров " + str(summa))
+for i in ["продажи менеджеров", "личные продажи ДРП"]:
+    # _my_functions.print_line("hyphens")
+    # print(i + "\n")
 
-df_result = df_vsego.join(df_rastorgn, on="Social_number", how="left")
-df_result = df_result.with_columns(
-    pl.when(pl.col("расторгнутых договоров").is_null())
-    .then(pl.lit(0))
-    .otherwise(pl.col("расторгнутых договоров"))
-    .alias("расторгнутых договоров")
-)
-print(df_result)
-summa = df_result["всего договоров"].sum()
-print("Всего договоров " + str(summa))
-summa = df_result["расторгнутых договоров"].sum()
-print("Расторгнутых договоров " + str(summa))
+    df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == i).group_by(["Social_number"]).agg(
+        pl.col("Номер договора").count().alias("всего договоров")
+    )
+    # print(df_vsego)
+    # print("Всего договоров " + str(df_vsego["всего договоров"].sum()) + "\n")
+
+    df_rastorgn = df_dogovory_long.filter((pl.col("Кто продал") == i) & (pl.col("Статус договора лизинга") == "Расторгнут") ).group_by(["Social_number"]).agg(
+        pl.col("Номер договора").count().alias("расторгнутых договоров")
+    )
+    # print(df_rastorgn)
+    # print("Расторгнутых договоров " + str(df_rastorgn["расторгнутых договоров"].sum()) + "\n")
+
+    df_result = df_vsego.join(df_rastorgn, on="Social_number", how="left")
+    df_result = df_result.with_columns(
+        pl.when(pl.col("расторгнутых договоров").is_null())
+        .then(pl.lit(0))
+        .otherwise(pl.col("расторгнутых договоров"))
+        .alias("расторгнутых договоров")
+    )
+    df_result = df_result.with_columns(
+        (pl.col("расторгнутых договоров") / pl.col("всего договоров")).alias("коэфф_р")
+    )
+    # print(df_result)
+    # print("Всего договоров " + str(df_result["всего договоров"].sum()))
+    # print("Расторгнутых договоров " + str(df_result["расторгнутых договоров"].sum()) + "\n")
+
+    df_koeff = pl.concat([df_koeff, df_result], how="diagonal")
+    # print(df_koeff)
+
+_my_functions.print_line("hyphens")
+print(df_koeff)
+
+# ------------------------------------------------------------------ добавление коэффициента расторжений
+
+df_dogovory_long = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
+df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
+# df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("коэфф_р").is_null())
+
+# df2tables.render(df_dogovory_long)
+_my_functions.view_itables_html(df=df_dogovory_long)
 
 # sys.exit()
