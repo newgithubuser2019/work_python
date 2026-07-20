@@ -58,6 +58,8 @@ else:
     month = "0" + str(inp2)
 filename1 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\разное\\договоры для коэфф расторжений\\" + str(inp1) + "\\" + month + "\\договоры.xlsx"
 filename2 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\контакт\\126 отчет\\" + str(inp1) + "\\" + month + "\\126.xlsx"
+filename3 = USERPROFILE + "\\Documents\\output.xlsx"
+filename4 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\история изменений ФИО\\" + str(inp1) + "\\" + month + "\\история изм ФИО.xlsx"
 
 # ------------------------------------------------------------------ database URIs
 # sql_username = getpass.getuser()
@@ -123,37 +125,39 @@ if df_from_sql.shape[0] == 0:
     # print(df_rastorgnut)
 
     # ------------------------------------------------------------------ удаление расторгнутых договоров из базы
-    rastorgn_dogovory = df_rastorgnut["Номер договора"].to_list()
-    # print(rastorgn_dogovory)
-    rastorgn_dogovory_query = []
-    for i in rastorgn_dogovory:
-        rastorgn_dogovory_query.append("N" + "\'" + i + "\'")
-    # print(rastorgn_dogovory_query)
+    if df_rastorgnut.shape[0] > 0:
+        rastorgn_dogovory = df_rastorgnut["Номер договора"].to_list()
+        # print(rastorgn_dogovory)
+        rastorgn_dogovory_query = []
+        for i in rastorgn_dogovory:
+            rastorgn_dogovory_query.append("N" + "\'" + i + "\'")
+        # print(rastorgn_dogovory_query)
 
-    query_p1 = "DELETE FROM dbo.BONUSDogBase_python WHERE [Номер договора] in ("
-    query_p2 = ", ".join(rastorgn_dogovory_query)
-    query_p3 = ")"
-    query = query_p1 + query_p2 + query_p3
-    # print(query)
+        query_p1 = "DELETE FROM dbo.BONUSDogBase_python WHERE [Номер договора] in ("
+        query_p2 = ", ".join(rastorgn_dogovory_query)
+        query_p3 = ")"
+        query = query_p1 + query_p2 + query_p3
+        # print(query)
+        # sys.exit()
 
-    # apache arrow adbc
-    """
-    from adbc_driver_manager import dbapi
-    with dbapi.connect(polars_uri_1) as conn:
-        with conn.cursor() as cur:
-            cur.execute("query")
-            conn.commit()
-            print("Rows deleted:", cur.rowcount)
-    """
+        # apache arrow adbc
+        """
+        from adbc_driver_manager import dbapi
+        with dbapi.connect(polars_uri_1) as conn:
+            with conn.cursor() as cur:
+                cur.execute("query")
+                conn.commit()
+                print("Rows deleted:", cur.rowcount)
+        """
 
-    # mssql-python
-    # conn_str = "Server=vls-sql-zup-dev,1433;Database=HR_CAB;Trusted_connection=yes;TrustServerCertificate=yes"
-    with mssql_python.connect(mssql_python_uri_1) as conn:
-        with conn.cursor() as cur:
-            cur.execute(query)
-            conn.commit()
-            print("\nRows deleted:", cur.rowcount)
-    print("Удалены договоры, по которым затерты цепочки")
+        # mssql-python
+        # conn_str = "Server=vls-sql-zup-dev,1433;Database=HR_CAB;Trusted_connection=yes;TrustServerCertificate=yes"
+        with mssql_python.connect(mssql_python_uri_1) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                conn.commit()
+                print("\nRows deleted:", cur.rowcount)
+        print("Удалены договоры, по которым затерты цепочки")
 
     # ------------------------------------------------------------------ загрузка новых договоров в базу
     """
@@ -290,9 +294,14 @@ df_dogovory_wide = df_dogovory_wide.with_columns(
     .alias("Кто продал")
 )
 df_dogovory_wide = df_dogovory_wide.sort(["LoadDt"], descending=True)
+# print(df_dogovory_wide.columns)
+df_dogovory_wide = df_dogovory_wide.filter(pl.col("Основной менеджер продаж (Лизинговая сделка) ").is_not_null())
 # _my_functions.view_itables_html(df=df_dogovory_wide)
 # print(df_dogovory_wide.head())
 # print(df_dogovory_wide.columns)
+
+# df_dogovory_wide.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ wide to long
 df_dogovory_long = df_dogovory_wide.unpivot(
@@ -302,7 +311,27 @@ df_dogovory_long = df_dogovory_wide.unpivot(
     value_name="ФИО"
 )
 df_dogovory_long = df_dogovory_long.sort(["Номер договора"], descending=False)
+df_dogovory_long = df_dogovory_long.with_columns(pl.col(["ФИО"]).str.to_lowercase().alias("ФИО_join"))
 # _my_functions.view_itables_html(df=df_dogovory_long)
+# sys.exit()
+
+# ------------------------------------------------------------------ загрузка изменений ФИО
+df_new_fio = pl.read_excel(
+    # engine="openpyxl",
+    read_options={"header_row": 3},
+    schema_overrides={
+        "Дата изменения": pl.Date,
+        },
+    source=filename4,
+    sheet_name="Лист_1",
+    has_header=True
+    # columns="A:B"
+)
+df_new_fio = df_new_fio.select("Дата изменения", "ФИО до изменения", "Сотрудник")
+df_new_fio = df_new_fio.sort(["Дата изменения"], descending=True)
+df_new_fio = df_new_fio.with_columns(pl.col(["ФИО до изменения"]).str.to_lowercase())
+print(df_new_fio.head())
+
 # sys.exit()
 
 # ------------------------------------------------------------------ загрузка из базы demography
@@ -325,27 +354,41 @@ df_demography = df_demography.with_columns(
     .alias("ФИО полное")
 )
 df_demography = df_demography.unique(subset=["ФИО полное"])
+df_demography = df_demography.with_columns(pl.col(["ФИО полное"]).str.to_lowercase())
 
 # print(df_demography.head())
 # _my_functions.view_itables_html(df=df_demography)
 
-# ------------------------------------------------------------------ добавление статуса договора и СНИЛС
+# ------------------------------------------------------------------ добавление статуса договора, СНИЛС, нового ФИО
 df_dogovory_long = df_dogovory_long.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
-df_dogovory_long = df_dogovory_long.join(df_demography, left_on="ФИО", right_on="ФИО полное", how="left")
-df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "Social_number")
+df_dogovory_long = df_dogovory_long.join(df_new_fio, left_on="ФИО_join", right_on="ФИО до изменения", how="left")
+df_dogovory_long = df_dogovory_long.join(df_demography, left_on="ФИО_join", right_on="ФИО полное", how="left")
+df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "Сотрудник", "Social_number")
+df_dogovory_long = df_dogovory_long.rename({
+    "Сотрудник": "ФИО_новое",
+    })
+df_dogovory_long = df_dogovory_long.with_columns(
+        pl.when(pl.col("ФИО_новое").is_null())
+        .then(pl.col("ФИО"))
+        .otherwise(pl.col("ФИО_новое"))
+        .alias("ФИО_новое")
+    )
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
+# df_dogovory_long.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ расчет коэфф расторжений
 df_koeff = pl.DataFrame([])
 
 for i in ["продажи менеджеров", "личные продажи ДРП"]:
-    # _my_functions.print_line("hyphens")
-    # print(i + "\n")
+    _my_functions.print_line("hyphens")
+    print(i + "\n")
 
-    df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == i).group_by(["Social_number"]).agg(
+    # df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == i).group_by(["Social_number"]).agg(
+    df_vsego = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & (pl.col("Кто продал") == i)).group_by(["Social_number"]).agg(
         pl.col("Номер договора").count().alias("всего договоров")
     )
     # print(df_vsego)
@@ -364,26 +407,67 @@ for i in ["продажи менеджеров", "личные продажи Д
         .otherwise(pl.col("расторгнутых договоров"))
         .alias("расторгнутых договоров")
     )
-    df_result = df_result.with_columns(
-        (pl.col("расторгнутых договоров") / pl.col("всего договоров")).alias("коэфф_р")
-    )
-    # print(df_result)
+    if i == "продажи менеджеров":
+        df_result = df_result.with_columns(
+            (1-pl.col("расторгнутых договоров") / pl.col("всего договоров")).alias("коэфф_р")
+        )
+    if i == "личные продажи ДРП":
+        df_result = df_result.with_columns(
+            (1-pl.col("расторгнутых договоров") / pl.col("всего договоров")).alias("коэфф_р_лДРП")
+        )
+        # df_result.write_excel(filename3)
+        # sys.exit()
+    print("df_result")
+    print(df_result)
     # print("Всего договоров " + str(df_result["всего договоров"].sum()))
     # print("Расторгнутых договоров " + str(df_result["расторгнутых договоров"].sum()) + "\n")
 
-    df_koeff = pl.concat([df_koeff, df_result], how="diagonal")
-    # print(df_koeff)
+    if i == "продажи менеджеров":
+        df_koeff = pl.concat([df_koeff, df_result], how="diagonal")
+    if i == "личные продажи ДРП":
+        # df_koeff = df_koeff.join(df_result, on="Social_number", how="full")
+        df_koeff = df_koeff.join(df_result, on="Social_number", how="left")
+    # sys.exit()
 
 _my_functions.print_line("hyphens")
+df_koeff = df_koeff.rename({
+    "всего договоров_right": "всего договоров_лДРП",
+    "расторгнутых договоров_right": "расторгнутых договоров_лДРП"
+    })
 print(df_koeff)
 
-# ------------------------------------------------------------------ добавление коэффициента расторжений
+# df_koeff.write_excel(filename3)
+# sys.exit()
 
+# ------------------------------------------------------------------ добавление коэффициента расторжений
 df_dogovory_long = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
-df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
+# df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("коэфф_р").is_null())
+df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null())
+df_dogovory_long = df_dogovory_long.sort(["Social_number"])
 
 # df2tables.render(df_dogovory_long)
 _my_functions.view_itables_html(df=df_dogovory_long)
+
+df_dogovory_long.write_excel(filename3)
+
+# ------------------------------------------------------------------ отбор работников, по которым менялось ФИО
+"""
+_my_functions.print_line("hyphens")
+print("Работники с изменениями ФИО:")
+print("\n")
+sn_list = df_dogovory_long["Social_number"].to_list()
+fio_list = df_dogovory_long["ФИО"].to_list()
+sn_fio_dict = {}
+for a,b in zip(sn_list, fio_list):
+    sn_fio_dict.setdefault(a, [])
+    if b not in sn_fio_dict[a]:
+        sn_fio_dict[a].append(b)
+for k,v in sn_fio_dict.items():
+    if len(v) > 1:
+        print(k)
+        print(v)
+        print("\n")
+"""
 
 # sys.exit()
