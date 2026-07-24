@@ -271,7 +271,8 @@ df_126 = df_126.sort(["Дата расторжения"], descending=True)
 print(df_126.head())
 
 # df2tables.render(df_from_excel)
-# _my_functions.view_itables_html(df=df_from_excel)
+# _my_functions.view_itables_html(df=df_126)
+# sys.exit()
 
 # ------------------------------------------------------------------ загрузка 12 предыдущих периодов из базы договоров
 query_p1 = "SELECT * FROM dbo.BONUSDogBase_python WHERE dogovor_period in ("
@@ -377,8 +378,10 @@ df_dogovory_long = df_dogovory_long.with_columns(
 
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
-# df_dogovory_long.write_excel(filename3)
-# sys.exit()
+# разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
+df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "ФИО_новое", "Social_number"])
+df_dogovory_long.write_excel(filename3)
+sys.exit()
 
 # ------------------------------------------------------------------ расчет коэфф расторжений
 df_koeff = pl.DataFrame([])
@@ -388,10 +391,10 @@ for i in ["продажи менеджеров", "личные продажи Д
     print(i + "\n")
 
     # df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == i).group_by(["Social_number"]).agg(
-    df_vsego = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & (pl.col("Кто продал") == i)).group_by(["Social_number"]).agg(
+    df_vsego = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & (pl.col("Кто продал") == i) & (pl.col("Social_number") == "14375459582")).group_by(["Social_number"]).agg(
         pl.col("Номер договора").count().alias("всего договоров")
     )
-    # print(df_vsego)
+    print(df_vsego)
     # print("Всего договоров " + str(df_vsego["всего договоров"].sum()) + "\n")
 
     df_rastorgn = df_dogovory_long.filter((pl.col("Кто продал") == i) & (pl.col("Статус договора лизинга") == "Расторгнут") ).group_by(["Social_number"]).agg(
@@ -429,11 +432,24 @@ for i in ["продажи менеджеров", "личные продажи Д
         df_koeff = df_koeff.join(df_result, on="Social_number", how="left")
     # sys.exit()
 
-_my_functions.print_line("hyphens")
+df_koeff = df_koeff.with_columns(pl.col(["коэфф_р", "коэфф_р_лДРП"]).round(2))
+df_koeff = df_koeff.with_columns(
+        pl.when(pl.col("коэфф_р") >= 0.95)
+        .then(pl.lit(1.00))
+        .otherwise(pl.col("коэфф_р"))
+        .alias("коэфф_р")
+    )
+df_koeff = df_koeff.with_columns(
+        pl.when(pl.col("коэфф_р_лДРП") >= 0.95)
+        .then(pl.lit(1.00))
+        .otherwise(pl.col("коэфф_р_лДРП"))
+        .alias("коэфф_р_лДРП")
+    )
 df_koeff = df_koeff.rename({
     "всего договоров_right": "всего договоров_лДРП",
     "расторгнутых договоров_right": "расторгнутых договоров_лДРП"
     })
+_my_functions.print_line("hyphens")
 print(df_koeff)
 
 # df_koeff.write_excel(filename3)
