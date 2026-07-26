@@ -378,10 +378,11 @@ df_dogovory_long = df_dogovory_long.with_columns(
 
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
-# разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
-df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "ФИО_новое", "Social_number"])
-df_dogovory_long.write_excel(filename3)
-sys.exit()
+
+df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "ФИО", "ФИО_новое", "Social_number"])
+# вар2 - разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
+# df_dogovory_long.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ расчет коэфф расторжений
 df_koeff = pl.DataFrame([])
@@ -390,8 +391,7 @@ for i in ["продажи менеджеров", "личные продажи Д
     _my_functions.print_line("hyphens")
     print(i + "\n")
 
-    # df_vsego = df_dogovory_long.filter(pl.col("Кто продал") == i).group_by(["Social_number"]).agg(
-    df_vsego = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & (pl.col("Кто продал") == i) & (pl.col("Social_number") == "14375459582")).group_by(["Social_number"]).agg(
+    df_vsego = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & (pl.col("Кто продал") == i)).group_by(["Social_number"]).agg(
         pl.col("Номер договора").count().alias("всего договоров")
     )
     print(df_vsego)
@@ -432,13 +432,14 @@ for i in ["продажи менеджеров", "личные продажи Д
         df_koeff = df_koeff.join(df_result, on="Social_number", how="left")
     # sys.exit()
 
-df_koeff = df_koeff.with_columns(pl.col(["коэфф_р", "коэфф_р_лДРП"]).round(2))
+
 df_koeff = df_koeff.with_columns(
         pl.when(pl.col("коэфф_р") >= 0.95)
         .then(pl.lit(1.00))
         .otherwise(pl.col("коэфф_р"))
         .alias("коэфф_р")
     )
+df_koeff = df_koeff.with_columns(pl.col(["коэфф_р", "коэфф_р_лДРП"]).round(2))
 df_koeff = df_koeff.with_columns(
         pl.when(pl.col("коэфф_р_лДРП") >= 0.95)
         .then(pl.lit(1.00))
@@ -460,6 +461,14 @@ df_dogovory_long = df_dogovory_long.join(df_koeff, on="Social_number", how="left
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("коэфф_р").is_null())
 df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null())
+df_dogovory_long = df_dogovory_long.group_by(["Social_number", "ФИО_новое"]).agg(
+        pl.col("всего договоров").mean().alias("всего договоров"),
+        pl.col("расторгнутых договоров").mean().alias("расторгнутых договоров"),
+        pl.col("коэфф_р").mean().alias("коэфф_р"),
+        pl.col("всего договоров_лДРП").mean().alias("всего договоров_лДРП"),
+        pl.col("расторгнутых договоров_лДРП").mean().alias("расторгнутых договоров_лДРП"),
+        pl.col("коэфф_р_лДРП").mean().alias("коэфф_р_лДРП")
+        )
 df_dogovory_long = df_dogovory_long.sort(["Social_number"])
 
 # df2tables.render(df_dogovory_long)
