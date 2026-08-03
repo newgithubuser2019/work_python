@@ -60,6 +60,7 @@ filename1 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы
 filename2 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\контакт\\126 отчет\\" + str(inp1) + "\\" + month + "\\126.xlsx"
 filename3 = USERPROFILE + "\\Documents\\output.xlsx"
 filename4 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\история изменений ФИО\\" + str(inp1) + "\\" + month + "\\история изм ФИО.xlsx"
+filename5 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\разное\\функциональная структура\\2026\\06\\функциональная структура ФЛ.xlsx"
 
 # ------------------------------------------------------------------ database URIs
 # sql_username = getpass.getuser()
@@ -120,7 +121,7 @@ if df_from_sql.shape[0] == 0:
         # columns="A:B"
     )
     # print(df_from_excel.head())
-    df_rastorgnut = df_from_excel.filter((pl.col("Комментарий") == "расторжение"))
+    df_rastorgnut = df_from_excel.filter(pl.col("Комментарий") == "расторжение")
     # df_new = df_from_excel.filter((pl.col("Комментарий") != "расторжение") | pl.col("Комментарий").is_null())
     # print(df_rastorgnut)
 
@@ -289,7 +290,7 @@ df_dogovory_wide = pl.read_database_uri(
         },
     )
 df_dogovory_wide = df_dogovory_wide.with_columns(
-    pl.when(pl.col("Основной менеджер продаж") == pl.col("Д регионы"))
+    pl.when((pl.col("Основной менеджер продаж") == pl.col("Д регионы")) & (pl.col("dogovor_period") >= pl.lit(datetime.date(2026, 2, 1), dtype=pl.Date)))
     .then(pl.lit("личные продажи ДРП"))
     .otherwise(pl.lit("продажи менеджеров"))
     .alias("Кто продал")
@@ -380,10 +381,40 @@ df_dogovory_long = df_dogovory_long.with_columns(
 # _my_functions.view_itables_html(df=df_dogovory_long)
 
 df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "ФИО", "ФИО_новое", "Social_number"])
+
 # вар2 - разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
 # df_dogovory_long.write_excel(filename3)
-# sys.exit()
 
+# ------------------------------------------------------------------ дополнительный лист - портфель
+"""
+df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
+df_portfel = df_portfel.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
+df_portfel = df_portfel.select("Номер договора", "ФИО_новое", "Должность", "Дата договора лизинга", "Дата расторжения")
+# df_portfel.write_excel(filename3)
+
+# sys.exit()
+"""
+
+# ------------------------------------------------------------------ отбор работников, по которым менялось ФИО
+"""
+_my_functions.print_line("hyphens")
+print("Работники с изменениями ФИО:")
+print("\n")
+sn_list = df_dogovory_long["Social_number"].to_list()
+fio_list = df_dogovory_long["ФИО"].to_list()
+sn_fio_dict = {}
+for a,b in zip(sn_list, fio_list):
+    sn_fio_dict.setdefault(a, [])
+    if b not in sn_fio_dict[a]:
+        sn_fio_dict[a].append(b)
+for k,v in sn_fio_dict.items():
+    if len(v) > 1:
+        print(k)
+        print(v)
+        print("\n")
+
+sys.exit()
+"""
 # ------------------------------------------------------------------ расчет коэфф расторжений
 df_koeff = pl.DataFrame([])
 
@@ -457,11 +488,11 @@ print(df_koeff)
 # sys.exit()
 
 # ------------------------------------------------------------------ добавление коэффициента расторжений
-df_dogovory_long = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
+df_koeff_itog = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("коэфф_р").is_null())
-df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null())
-df_dogovory_long = df_dogovory_long.group_by(["Social_number", "ФИО_новое"]).agg(
+df_koeff_itog = df_koeff_itog.filter(pl.col("ФИО").is_not_null())
+df_koeff_itog = df_koeff_itog.group_by(["Social_number", "ФИО_новое"]).agg(
         pl.col("всего договоров").mean().alias("всего договоров"),
         pl.col("расторгнутых договоров").mean().alias("расторгнутых договоров"),
         pl.col("коэфф_р").mean().alias("коэфф_р"),
@@ -469,30 +500,45 @@ df_dogovory_long = df_dogovory_long.group_by(["Social_number", "ФИО_ново�
         pl.col("расторгнутых договоров_лДРП").mean().alias("расторгнутых договоров_лДРП"),
         pl.col("коэфф_р_лДРП").mean().alias("коэфф_р_лДРП")
         )
-df_dogovory_long = df_dogovory_long.sort(["Social_number"])
+df_koeff_itog = df_koeff_itog.sort(["Social_number"])
 
 # df2tables.render(df_dogovory_long)
-_my_functions.view_itables_html(df=df_dogovory_long)
+# _my_functions.view_itables_html(df=df_dogovory_long)
 
-df_dogovory_long.write_excel(filename3)
+# df_koeff_itog.write_excel(filename3)
+# sys.exit()
 
-# ------------------------------------------------------------------ отбор работников, по которым менялось ФИО
-"""
-_my_functions.print_line("hyphens")
-print("Работники с изменениями ФИО:")
-print("\n")
-sn_list = df_dogovory_long["Social_number"].to_list()
-fio_list = df_dogovory_long["ФИО"].to_list()
-sn_fio_dict = {}
-for a,b in zip(sn_list, fio_list):
-    sn_fio_dict.setdefault(a, [])
-    if b not in sn_fio_dict[a]:
-        sn_fio_dict[a].append(b)
-for k,v in sn_fio_dict.items():
-    if len(v) > 1:
-        print(k)
-        print(v)
-        print("\n")
-"""
+
+# ------------------------------------------------------------------ загрузка функциональной структуры
+df_struktura = pl.read_excel(
+    # engine="openpyxl",
+    source=filename5,
+    sheet_name="Лист1",
+    has_header=True
+    # columns="A:B"
+)
+df_struktura = df_struktura.select("ФИО менеджера", "Город", "Тип", "Роль", "РГ", "НО", "ДД", "Д регионы", "ТД", "РД", "НУ")
+print(df_struktura)
+# df_struktura.write_excel(filename3)
 
 # sys.exit()
+
+# ------------------------------------------------------------------ добавление функциональной структуры в коэфф расторжений
+df_koeff_itog = df_koeff_itog.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
+df_koeff_itog.write_excel(filename3)
+
+# sys.exit()
+
+# ------------------------------------------------------------------ дополнительный лист - портфель
+df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
+df_portfel = df_portfel.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
+# df_portfel = df_portfel.select("Номер договора", "Должность", "Дата договора лизинга", "Дата расторжения", "ФИО_новое")
+
+df_portfel = df_portfel.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
+df_portfel = df_portfel.select("Номер договора", "Дата договора лизинга", "Дата расторжения", "ФИО_новое", "Тип", "Роль", "Город")
+# добавить колонку Статус
+df_portfel.write_excel(filename3)
+
+sys.exit()
+
+# ------------------------------------------------------------------ дополнительный лист - расшифровка
