@@ -532,13 +532,28 @@ df_koeff_itog.write_excel(filename3)
 # ------------------------------------------------------------------ дополнительный лист - портфель
 df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
 df_portfel = df_portfel.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
-# df_portfel = df_portfel.select("Номер договора", "Должность", "Дата договора лизинга", "Дата расторжения", "ФИО_новое")
-
 df_portfel = df_portfel.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
-df_portfel = df_portfel.select("Номер договора", "Дата договора лизинга", "Дата расторжения", "ФИО_новое", "Тип", "Роль", "Город")
-# добавить колонку Статус
-df_portfel.write_excel(filename3)
+df_portfel = df_portfel.with_columns(
+    pl.when(pl.col("Должность") == pl.lit("Основной менеджер продаж"))
+    .then(pl.lit("Менеджер"))
+    .otherwise(pl.lit("Руководитель"))
+    .alias("Статус")
+)
+# df_portfel = df_portfel.select("Номер договора", "Дата договора лизинга", "Дата расторжения", "ФИО_новое", "Тип", "Должность", "Статус", "Роль", "Город")
+df_portfel = df_portfel.select("Номер договора", "Дата договора лизинга", "Дата расторжения", "ФИО_новое", "Тип", "Статус", "Роль", "Город")
 
-sys.exit()
+df_portfel.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ дополнительный лист - расшифровка
+df_rasshifrovka = df_dogovory_long.filter(pl.col("ФИО").is_not_null())
+df_rasshifrovka = df_rasshifrovka.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
+df_rasshifrovka = df_rasshifrovka.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
+df_rasshifrovka = df_rasshifrovka.with_columns(
+    pl.when(pl.col("Должность") == pl.lit("Основной менеджер продаж"))
+    .then(pl.lit("Менеджер"))
+    .otherwise(pl.lit("Руководитель"))
+    .alias("Статус")
+)
+df_rasshifrovka = df_rasshifrovka.select("Кто продал", "Номер договора", "Дата договора лизинга", "Статус договора лизинга", "Дата расторжения", "Social_number", "ФИО", "ФИО_новое", "Должность", "Статус", "Тип", "Роль")
+df_rasshifrovka.write_excel(filename3)
