@@ -61,6 +61,7 @@ filename2 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы
 filename3 = USERPROFILE + "\\Documents\\output.xlsx"
 filename4 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\история изменений ФИО\\" + str(inp1) + "\\" + month + "\\история изм ФИО.xlsx"
 filename5 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\разное\\функциональная структура\\2026\\06\\функциональная структура ФЛ.xlsx"
+filename6 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\demography\\2026\\06\\demography.xlsx"
 
 # ------------------------------------------------------------------ database URIs
 # sql_username = getpass.getuser()
@@ -153,11 +154,11 @@ if df_from_sql.shape[0] == 0:
 
         # mssql-python
         # conn_str = "Server=vls-sql-zup-dev,1433;Database=HR_CAB;Trusted_connection=yes;TrustServerCertificate=yes"
-        with mssql_python.connect(mssql_python_uri_1) as conn:
-            with conn.cursor() as cur:
-                cur.execute(query)
-                conn.commit()
-                print("\nRows deleted:", cur.rowcount)
+        with mssql_python.connect(mssql_python_uri_1) as conn, conn.cursor() as cur:
+            # with conn.cursor() as cur:
+            cur.execute(query)
+            conn.commit()
+            print("\nRows deleted:", cur.rowcount)
         print("Удалены договоры, по которым затерты цепочки")
 
     # ------------------------------------------------------------------ загрузка новых договоров в базу
@@ -313,9 +314,12 @@ df_dogovory_long = df_dogovory_wide.unpivot(
     value_name="ФИО"
 )
 df_dogovory_long = df_dogovory_long.sort(["Номер договора"], descending=False)
-df_dogovory_long = df_dogovory_long.with_columns(pl.col(["ФИО"]).str.to_lowercase().alias("ФИО_join"))
+# df_dogovory_long = df_dogovory_long.with_columns(pl.col(["ФИО"]).str.to_lowercase().alias("ФИО_lowercase"))
+
 # _my_functions.view_itables_html(df=df_dogovory_long)
+# df_dogovory_long.write_excel(filename3)
 # sys.exit()
+
 
 # ------------------------------------------------------------------ загрузка изменений ФИО
 df_new_fio = pl.read_excel(
@@ -330,13 +334,18 @@ df_new_fio = pl.read_excel(
     # columns="A:B"
 )
 df_new_fio = df_new_fio.select("Дата изменения", "ФИО до изменения", "Сотрудник")
+df_new_fio = df_new_fio.rename({
+    "Сотрудник": "ФИО_новое",
+    })
 df_new_fio = df_new_fio.sort(["Дата изменения"], descending=True)
-df_new_fio = df_new_fio.with_columns(pl.col(["ФИО до изменения"]).str.to_lowercase())
+# df_new_fio = df_new_fio.with_columns(pl.col(["ФИО до изменения"]).str.to_lowercase())
 print(df_new_fio.head())
 
 # sys.exit()
 
-# ------------------------------------------------------------------ загрузка из базы demography
+# ------------------------------------------------------------------ загрузка demography
+# из базы
+"""
 query = "SELECT * FROM [dbo].[Demography_report_hist] WHERE Repdt > " + list_of_12_periods[-1] + " AND Repdt < " + "\'" + str(bonus_period) + "\'"
 # print(query)
 df_demography = pl.read_database_uri(
@@ -356,44 +365,65 @@ df_demography = df_demography.with_columns(
     .alias("ФИО полное")
 )
 df_demography = df_demography.unique(subset=["ФИО полное"])
-df_demography = df_demography.with_columns(pl.col(["ФИО полное"]).str.to_lowercase())
+# df_demography = df_demography.with_columns(pl.col(["ФИО полное"]).str.to_lowercase())
+# df_demography.write_excel(filename3)
+# sys.exit()
+"""
+# из excel
+df_demography = pl.read_excel(
+    # engine="openpyxl",
+    schema_overrides={
+        "Дата рождения / Date of birth": pl.Date,
+        "Дата найма / Hire date": pl.Date,
+        "Дата последнего изменения назначения / Last assignment change": pl.Date,
+        "Изначальная дата трудоустройства в ВТБ / Original VTB hire date": pl.Date,
+        "Дата увольнения / Actual termination date": pl.Date
+        },
+    source=filename6,
+    sheet_name="Лист_1",
+    has_header=True
+    # columns="A:B"
+)
+df_demography = df_demography.with_columns(
+    pl.when(pl.col("Локальное отчество или средние имена / Middle name local").is_null())
+    .then(pl.col("Локальная фамилия / Last name local") + " " + pl.col("Локальное имя / First name local"))
+    .otherwise(pl.col("Локальная фамилия / Last name local") + " " + pl.col("Локальное имя / First name local") + " " + pl.col("Локальное отчество или средние имена / Middle name local"))
+    .alias("ФИО полное")
+)
+df_demography = df_demography.rename({
+    "СНИЛС работника / Social number": "Social_number",
+    })
+df_demography = df_demography.unique(subset=["ФИО полное", "Social_number"])
+# df_demography = df_demography.with_columns(pl.col(["ФИО полное"]).str.to_lowercase())
 
 # print(df_demography.head())
 # _my_functions.view_itables_html(df=df_demography)
+# df_demography.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ добавление статуса договора, СНИЛС, нового ФИО
 df_dogovory_long = df_dogovory_long.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
-df_dogovory_long = df_dogovory_long.join(df_new_fio, left_on="ФИО_join", right_on="ФИО до изменения", how="left")
-df_dogovory_long = df_dogovory_long.join(df_demography, left_on="ФИО_join", right_on="ФИО полное", how="left")
-df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "Сотрудник", "Social_number")
-df_dogovory_long = df_dogovory_long.rename({
-    "Сотрудник": "ФИО_новое",
-    })
+df_dogovory_long = df_dogovory_long.join(df_new_fio, left_on=pl.col("ФИО").str.to_lowercase(), right_on=pl.col("ФИО до изменения").str.to_lowercase(), how="left")
 df_dogovory_long = df_dogovory_long.with_columns(
         pl.when(pl.col("ФИО_новое").is_null())
         .then(pl.col("ФИО"))
         .otherwise(pl.col("ФИО_новое"))
         .alias("ФИО_новое")
     )
+df_dogovory_long = df_dogovory_long.join(df_demography, left_on=pl.col("ФИО_новое").str.to_lowercase(), right_on=pl.col("ФИО полное").str.to_lowercase(), how="left")
+# df_dogovory_long.write_excel(filename3)
+# sys.exit()
+df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "ФИО_новое", "Social_number")
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
-
+df_dogovory_long.write_excel(filename3)
+sys.exit()
 df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "ФИО", "ФИО_новое", "Social_number"])
 
 # вар2 - разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
 # df_dogovory_long.write_excel(filename3)
-
-# ------------------------------------------------------------------ дополнительный лист - портфель
-"""
-df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
-df_portfel = df_portfel.join(df_126, left_on="Номер договора", right_on="Договор лизинга", how="left")
-df_portfel = df_portfel.select("Номер договора", "ФИО_новое", "Должность", "Дата договора лизинга", "Дата расторжения")
-# df_portfel.write_excel(filename3)
-
-# sys.exit()
-"""
 
 # ------------------------------------------------------------------ отбор работников, по которым менялось ФИО
 """
@@ -484,8 +514,8 @@ df_koeff = df_koeff.rename({
 _my_functions.print_line("hyphens")
 print(df_koeff)
 
-# df_koeff.write_excel(filename3)
-# sys.exit()
+df_koeff.write_excel(filename3)
+sys.exit()
 
 # ------------------------------------------------------------------ добавление коэффициента расторжений
 df_koeff_itog = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
@@ -505,8 +535,8 @@ df_koeff_itog = df_koeff_itog.sort(["Social_number"])
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
 
-# df_koeff_itog.write_excel(filename3)
-# sys.exit()
+df_koeff_itog.write_excel(filename3)
+sys.exit()
 
 
 # ------------------------------------------------------------------ загрузка функциональной структуры
@@ -527,7 +557,7 @@ print(df_struktura)
 df_koeff_itog = df_koeff_itog.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
 df_koeff_itog.write_excel(filename3)
 
-# sys.exit()
+sys.exit()
 
 # ------------------------------------------------------------------ дополнительный лист - портфель
 df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
