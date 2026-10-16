@@ -6,6 +6,7 @@ import webbrowser
 import itables
 import openpyxl
 from itables import to_html_datatable
+from concurrent.futures import ProcessPoolExecutor
 
 
 # -------------------------------------------------------------------NOTES
@@ -37,6 +38,333 @@ def print_line(line_type):
         print("\n------------------------------------------------------------------------------------------------------------------------")
     if line_type == "exclamation_marks":
         print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+
+def wb_save_openpyxl(
+    wb,
+    output_file,
+):
+    while True:
+        try:
+            wb.save(output_file)
+        except PermissionError:
+            print_line("exclamation_marks")
+            print("File \"" + output_file + "\" appears to be open. Please close the file and try again")
+            print_line("exclamation_marks")
+            print("\n")
+            sys.exit()
+        break
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+"""
+def openpyxl_write_df(t):
+        for rowsofcells in t:
+                for cellsinrows in rowsofcells:
+                    for k in celldict.keys():
+                        if cellsinrows.coordinate == k:
+                            cellsinrows.value = celldict[k]
+                            if change_alignment == 1:
+                                ws[cellsinrows.coordinate].alignment = h_left_v_center
+                            if add_borders == 1:
+                                ws[cellsinrows.coordinate].border = allborders
+                            print(k)
+                            # print(celldict[k])
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+"""
+def df_to_excel_openpyxl(
+    # Border,
+    # Side,
+    # Alignment,
+    # Font,
+    # get_column_letter,
+    # openpyxl,
+    # pprint,
+    # pd,
+    #
+    df_library, # polars or pandas
+    wb_name,
+    sheet_name,
+    df_для_записи,
+    rowtostartin_pd,
+    coltostartin_pd,
+    aggr_row, # 1 - добавяет итоговую строку, 0 - не добавляет
+    всего_colnum_offset, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
+    below_table, # 1 - добавляет значения (в зависимости от sheet_name) ниже dataframe, 0 - только dataframe
+    below_table_offset_не_приказ,
+    below_table_offset_приказ,
+    clearing_marker, # "не удалять" или любое другое значение
+    clearing_marker_col, # openpyxl column, not pandas column - so basically it equals excel col number
+    clearing_offset, # rownum of clearing marker - rownum of first row you don't want to clear + 1
+    remove_borders, # whether or not to remove borders within clearing range (1-yes, 0-no)
+    change_alignment, # 1 - меняет выравнивание, 0 - не меняет 
+    add_borders, # 1 - добавяет границы, 0 - не добавляет
+    font_change_scope, # на сколько строк вниз после окончания dataframe менять шрифт, минимальное значение 0
+):
+    """
+    This is a function for writing into existing excel files
+    Steps:
+    declaring DEFAULT INPUTS
+    creating STYLE OBJECTS
+    calculating DEPENDING VARIABLES
+    creating a map (dictionary) of cells and values
+    WORKING WITH DESTINATION FILE
+    SAVING CHANGES
+    """
+    # ------------------------------------------------------------------ declaring default variables
+    cellvallist = []
+    celldict = {}
+    endrowforclearing = ""
+    agg_row_names = ["Всего:", "ВСЕГО:", "Всего", "ВСЕГО", "Итого:", "ИТОГО:", "Итого", "ИТОГО"]
+
+    # ------------------------------------------------------------------ creating font objects
+    # times new roman
+    font_TMR11 = openpyxl.styles.Font(name = "Times New Roman", size = 11)
+    font_TMR12 = openpyxl.styles.Font(name = "Times New Roman", size = 12)
+    font_TMR12_grey = openpyxl.styles.Font(name = "Times New Roman", size = 12, color = "FFC0C0C0")
+    font_TMR12_bold = openpyxl.styles.Font(name = "Times New Roman", size = 12, bold = True)
+    font_TMR14 = openpyxl.styles.Font(name = "Times New Roman", size = 14, bold = False)
+    font_TMR14_bold = openpyxl.styles.Font(name = "Times New Roman", size = 14, bold = True)
+    # arial
+    font_arial10 = openpyxl.styles.Font(name = "Arial", size = 10)
+    font_arial11_italic = openpyxl.styles.Font(name = "Arial", size = 11, italic = True)
+    font_arial12 = openpyxl.styles.Font(name = "Arial", size = 12)
+    font_arial12_grey = openpyxl.styles.Font(name = "Arial", size = 12, color = "FFC0C0C0")
+    font_arial12_white = openpyxl.styles.Font(name = "Arial", size = 12, color = "FFFFFF")
+    font_arial12_bold = openpyxl.styles.Font(name = "Arial", size = 12, bold = True)
+    font_arial14 = openpyxl.styles.Font(name = "Arial", size = 14)
+
+    # ------------------------------------------------------------------ creating alignment objects
+    # horizontal
+    horizontal_right = openpyxl.styles.Alignment(horizontal="right")
+    horizontal_left = openpyxl.styles.Alignment(horizontal="left")
+    # horizontal-vertical
+    h_left_v_center = openpyxl.styles.Alignment(horizontal="left", vertical="center", wrap_text=True)
+    h_left_v_center2 = openpyxl.styles.Alignment(horizontal="left", vertical="center", wrap_text=False)
+
+    # ------------------------------------------------------------------ creating border objects
+    noborder = openpyxl.styles.Border(
+                    left=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    right=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    top=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    bottom=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    )
+    allborders = openpyxl.styles.Border(
+                    left=openpyxl.styles.Side(border_style="thin", color="FF000000"),
+                    right=openpyxl.styles.Side(border_style="thin", color="FF000000"),
+                    top=openpyxl.styles.Side(border_style="thin", color="FF000000"),
+                    bottom=openpyxl.styles.Side(border_style="thin", color="FF000000"),
+                    )
+    noleftborder = openpyxl.styles.Border(left=openpyxl.styles.Side(border_style=None, color="FF000000"))
+    noLBborder = openpyxl.styles.Border(
+                    left=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    bottom=openpyxl.styles.Side(border_style=None, color="FF000000"),
+                    )
+    
+    # ------------------------------------------------------------------ calculating depending variables
+    df_shape = df_для_записи.shape
+    # print(df_shape)
+    rownumtoadd = df_shape[0] - 1
+    colnumtoadd = df_shape[1] - 1
+    startcellLetter_op = openpyxl.utils.get_column_letter(coltostartin_pd + 1)
+    endcellLetter_op = openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd)
+    
+    # ------------------------------------------------------------------ creating a dictionary of cells and values
+    for a in range(0, df_для_записи.shape[0]):
+        for b in range(0, df_для_записи.shape[1]):
+            smalllist = []
+            smalllist.append(a)
+            smalllist.append(b)
+            if df_library == "pandas":
+                smalllist.append(df_для_записи.iloc[a,b])
+            if df_library == "polars":
+                smalllist.append(df_для_записи[a, b])
+            cellvallist.append(smalllist)
+    # print(cellvallist)
+    celldict_new = {}
+    for element in cellvallist:
+        cellcoord = openpyxl.utils.get_column_letter(element[1]+1+coltostartin_pd) + str(element[0]+1+rowtostartin_pd)
+        cellval = element[2]
+        celldict_new.setdefault(cellcoord, cellval)
+    # print("celldict_new")
+    # pprint.pprint(celldict_new)
+    # sys.exit()
+    celldict = celldict_new
+
+    # ------------------------------------------------------------------ loading workbook
+    print("loading workbook")
+    wb = openpyxl.load_workbook(wb_name)
+    ws = wb[sheet_name]
+    rowmax = ws.max_row + 1
+    # print(str(rowmax))
+
+    # ------------------------------------------------------------------ removing old data
+    print("removing old data")
+    if clearing_marker != "не удалять":
+        # calculating end row for clearing
+        condition = 1
+        for i in range(rowtostartin_pd+1, rowmax + 1):
+            while condition==1:
+                # list1 = list(range(rowtostartin_pd+1, rowmax + 1))
+                # print(list1)
+                searchvalue = str(ws.cell(row = i, column = clearing_marker_col).value)
+                # print(i)
+                # print(searchvalue)
+                if searchvalue == clearing_marker:
+                    endrowforclearing = i-clearing_offset
+                    condition = 0
+                break
+        # print(endrowforclearing)
+        
+        # clearing cells and removing borders
+        if clearing_marker == "удалить все":
+            endrowforclearing = rowmax + 1
+            # print(endrowforclearing)
+            # sys.exit()
+        op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(endrowforclearing)])
+        """
+        def openpyxl_delete_value():
+            for rowsofcells in op_tuple:
+                for cellsinrows in rowsofcells:
+                    # print(cellsinrows.coordinate)
+                    # print(cellsinrows.value)
+                    cellsinrows.value = ""
+                    if remove_borders == 1:
+                        ws[cellsinrows.coordinate].border = noborder
+        # print(f"Текущее значение __name__ это: {__name__}")
+
+        if __name__ == '_my_functions':
+            with ProcessPoolExecutor() as executor:
+                executor.map(openpyxl_delete_value)
+        """
+        for rowsofcells in op_tuple:
+            for cellsinrows in rowsofcells:
+                # print(cellsinrows.coordinate)
+                # print(cellsinrows.value)
+                cellsinrows.value = ""
+                if remove_borders == 1:
+                    ws[cellsinrows.coordinate].border = noborder
+    
+    # ------------------------------------------------------------------ transferring values from celldict and applying styles
+    print("transferring values from celldict and applying styles")
+    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd)])
+    """
+    def openpyxl_write_df():
+        for rowsofcells in op_tuple:
+                for cellsinrows in rowsofcells:
+                    for k in celldict.keys():
+                        if cellsinrows.coordinate == k:
+                            cellsinrows.value = celldict[k]
+                            if change_alignment == 1:
+                                ws[cellsinrows.coordinate].alignment = h_left_v_center
+                            if add_borders == 1:
+                                ws[cellsinrows.coordinate].border = allborders
+                            print(k)
+                            # print(celldict[k])
+    
+    
+    if __name__ == '_my_functions':
+        print("yes")
+        with ProcessPoolExecutor() as executor:
+            executor.map(lambda _: openpyxl_write_df, op_tuple)
+    
+    # import multiprocessing
+    # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        # pool.map(openpyxl_write_df, op_tuple)
+    """
+    """
+    # if __name__ == '_my_functions':
+            # with ProcessPoolExecutor() as executor:
+    for rowsofcells in op_tuple:
+        for cellsinrows in rowsofcells:
+            for k in celldict.keys():
+                if cellsinrows.coordinate == k:
+                    cellsinrows.value = celldict[k]
+                    if change_alignment == 1:
+                        ws[cellsinrows.coordinate].alignment = h_left_v_center
+                    if add_borders == 1:
+                        ws[cellsinrows.coordinate].border = allborders
+                    # print(k)
+                    # print(celldict[k])
+    
+    celldict = {}
+    """
+    for row in df_для_записи.iter_rows():
+        # print(row)
+        ws.append(list(row))
+
+    # ------------------------------------------------------------------ changing font
+    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + font_change_scope)])
+    for rowsofcells in op_tuple:
+        for cellsinrows in rowsofcells:
+            ws[cellsinrows.coordinate].font = font_arial10
+            """
+            if cellsinrows.value == "Начальник отдела по работе с персоналом":
+                ws[cellsinrows.coordinate].font = font_arial12_bold
+            if cellsinrows.value == "И. В. Маклаков" or cellsinrows.value == "Ю. С. Ткаченко":
+                ws[cellsinrows.coordinate].font = font_arial12_bold
+            """
+    # ------------------------------------------------------------------ adjusting row height
+    """
+    cell_height_1 = 35
+    cell_height_2 = 15.75
+    for i in range(rowtostartin_pd + 1, rowtostartin_pd + 1 + rownumtoadd): # from start to before row ВСЕГО
+        ws.row_dimensions[i].height = cell_height_1
+    for i in range(rowtostartin_pd + 1 + rownumtoadd, rowmax): # from row ВСЕГО downwards
+        ws.row_dimensions[i].height = cell_height_2
+    """
+
+    # ------------------------------------------------------------------ adding aggregate row
+    if aggr_row==1:
+        всего_colnum = coltostartin_pd + 1 + colnumtoadd - всего_colnum_offset
+        # removing row number of ВСЕГО column
+        if всего_colnum != 1: # если ВСЕГО не в 1ой колонке, т.е. если в 1ой колонке идет нумерация
+            rowmax = ws.max_row + 1
+            for i in range(1, rowmax):
+                searchvalue = ws.cell(row = i, column = всего_colnum).value
+                if searchvalue in agg_row_names:
+                    ws.cell(row = i, column = coltostartin_pd + 1).value = "" # делаем пустой 1ую ячейку в аггрегатной строке
+        
+        # changing font, borders and alignment for aggregate row
+        rowmax = ws.max_row + 1
+        for i in range(1, rowmax):
+            searchvalue = ws.cell(row = i, column = всего_colnum).value
+            if searchvalue in agg_row_names:
+                # ws.cell(row = i, column = всего_colnum).font = font_arial12_bold # по идее это лишнее
+                ws.cell(row = i, column = всего_colnum).alignment = horizontal_right
+                for b in range(0, всего_colnum_offset + 1):
+                    ws.cell(row = i, column = всего_colnum + b).font = font_arial12_bold
+                if всего_colnum != 1:
+                    for b in range(1, всего_colnum):
+                        # ws.cell(row = i, column = всего_colnum - b).border = noleftborder
+                        ws.cell(row = i, column = всего_colnum - b).border = noLBborder
+
+    # ------------------------------------------------------------------ adding values to cells below table (not a fixed position, conditional on dataframe size)
+    if below_table == 1:
+        """
+        sheet_names_list = ["к_приказу", "основные", "вспомогательные", "свод", "проверка"]
+        if sheet_name in sheet_names_list:
+            ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 3)].value = "Должность1"
+            ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 5)].value = "Должность2"
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_не_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 3)].value = "ФИО 1"
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_не_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 3)].alignment = horizontal_right
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_не_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 5)].value = "ФИО 2"
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_не_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 5)].alignment = horizontal_right
+        """
+        if sheet_name == "приказ":
+            ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 6)].value = "Должность1"
+            ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 6)].font = font_arial12_bold
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].value = "ФИО 1"
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].alignment = horizontal_right
+            ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - below_table_offset_приказ) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].font = font_arial12_bold
+        if sheet_name == "основные" or sheet_name == "вспомогательные":
+            for i in range(1, rowmax):
+                searchvalue = ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd).value
+                if searchvalue == "Уволен" or searchvalue == "Увольнение":
+                    ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - 1).value = "Увольнение"
+                    for b in range(1, coltostartin_pd + 1 + colnumtoadd):
+                        ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - b).font = font_arial12_grey
+    
+    # ------------------------------------------------------------------ saving changes
+    wb_save_openpyxl(wb, wb_name)
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
 
 def rawdata_pererabotka(квартал, USERPROFILE, inp0, inp1, inp2, inp2a, inp3, monthsdict, openpyxl):
@@ -462,22 +790,6 @@ def pd_toexcel(
         break
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
 
-def wb_save_openpyxl(
-    wb,
-    filename,
-):
-    while True:
-        try:
-            wb.save(filename)
-        except PermissionError:
-            print_line("exclamation_marks")
-            print("File \"" + filename + "\" appears to be open. Please close the file and try again")
-            print_line("exclamation_marks")
-            print("\n")
-            sys.exit()
-        break
-# -------------------------------------------------------------------------------------------------------------------------------------------------------
-
 def writing_openpyxl(
     # Border,
     # Side,
@@ -509,250 +821,6 @@ def writing_openpyxl(
         break
     # sys.exit()
 
-    # SAVING CHANGES-----------------------------------------------------------------------------------------------------------------------------------------------------
-    wb_save_openpyxl(wb, filename)
-# -------------------------------------------------------------------------------------------------------------------------------------------------------
-
-def df_to_excel_openpyxl(
-    # Border,
-    # Side,
-    # Alignment,
-    # Font,
-    # get_column_letter,
-    # openpyxl,
-    # pprint,
-    # pd,
-    #
-    filename,
-    разновидность,
-    df_для_записи,
-    rowtostartin_pd,
-    coltostartin_pd,
-    всего_colnum_offset, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
-    неприказ_belowtablenames_offset,
-    приказ_belowtablenames_offset,
-    clearing_marker,
-    clearing_marker_col, # openpyxl column, not pandas column - so basically it equals excel col number
-    clearing_offset, # rownum of clearing marker - rownum of first row you don't want to clear + 1
-    remove_borders, # whether or not to remove borders within clearing range (1-yes, 0-no)
-    change_alignment,
-    add_borders,
-    aggr_row,
-    font_change_scope, # на сколько вниз строк после окончания dataframe менять шрифт, минимальное значение 0
-):
-    """
-    This is a function for writing into existing excel files
-    Steps:
-    declaring DEFAULT INPUTS
-    creating STYLE OBJECTS
-    calculating DEPENDING VARIABLES
-    creating a map (dictionary) of cells and values
-    WORKING WITH DESTINATION FILE
-    SAVING CHANGES
-    """
-    # declaring DEFAULT INPUTS---------------------------------------------------------------------------------------------------------------------------------------------------------------
-    cellvallist = []
-    celldict = {}
-    endrowforclearing = ""
-    разновидность_тип1 = ["к_приказу", "основные", "вспомогательные", "свод", "проверка"]
-    agg_row_names = ["Всего:", "ВСЕГО:", "Всего", "ВСЕГО", "Итого:", "ИТОГО:", "Итого", "ИТОГО"]
-
-    # creating STYLE OBJECTS---------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # border objects
-    noborder = openpyxl.styles.Border(
-                    left=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    right=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    top=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    bottom=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    )
-    allborders = openpyxl.styles.Border(
-                    left=openpyxl.styles.Side(border_style="thin", color="FF000000"),
-                    right=openpyxl.styles.Side(border_style="thin", color="FF000000"),
-                    top=openpyxl.styles.Side(border_style="thin", color="FF000000"),
-                    bottom=openpyxl.styles.Side(border_style="thin", color="FF000000"),
-                    )
-    noleftborder = openpyxl.styles.Border(left=openpyxl.styles.Side(border_style=None, color="FF000000"))
-    noLBborder = openpyxl.styles.Border(
-                    left=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    bottom=openpyxl.styles.Side(border_style=None, color="FF000000"),
-                    )
-
-    # alignment objects
-    # horizontal
-    horizontal_right = openpyxl.styles.Alignment(horizontal="right")
-    horizontal_left = openpyxl.styles.Alignment(horizontal="left")
-    # horizontal-vertical
-    h_left_v_center = openpyxl.styles.Alignment(horizontal="left", vertical="center", wrap_text=True)
-    h_left_v_center2 = openpyxl.styles.Alignment(horizontal="left", vertical="center", wrap_text=False)
-
-    # font objects
-    # times new roman
-    font_TMR11 = openpyxl.styles.Font(name = "Times New Roman", size = 11)
-    font_TMR12 = openpyxl.styles.Font(name = "Times New Roman", size = 12)
-    font_TMR12_grey = openpyxl.styles.Font(name = "Times New Roman", size = 12, color = "FFC0C0C0")
-    font_TMR12_bold = openpyxl.styles.Font(name = "Times New Roman", size = 12, bold = True)
-    font_TMR14 = openpyxl.styles.Font(name = "Times New Roman", size = 14, bold = False)
-    font_TMR14_bold = openpyxl.styles.Font(name = "Times New Roman", size = 14, bold = True)
-    # arial
-    font_arial10 = openpyxl.styles.Font(name = "Arial", size = 10)
-    font_arial11_italic = openpyxl.styles.Font(name = "Arial", size = 11, italic = True)
-    font_arial12 = openpyxl.styles.Font(name = "Arial", size = 12)
-    font_arial12_grey = openpyxl.styles.Font(name = "Arial", size = 12, color = "FFC0C0C0")
-    font_arial12_white = openpyxl.styles.Font(name = "Arial", size = 12, color = "FFFFFF")
-    font_arial12_bold = openpyxl.styles.Font(name = "Arial", size = 12, bold = True)
-    font_arial14 = openpyxl.styles.Font(name = "Arial", size = 14)
-    
-    # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # calculating DEPENDING VARIABLES
-    df_shape = df_для_записи.shape
-    # print(df_shape)
-    rownumtoadd = df_shape[0] - 1
-    colnumtoadd = df_shape[1] - 1
-    startcellLetter_op = openpyxl.utils.get_column_letter(coltostartin_pd + 1)
-    endcellLetter_op = openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd)
-    # всего_colnum = coltostartin_pd + 1 + colnumtoadd - всего_colnum_offset # перенес в секцию AGGREGATE ROW
-    
-    # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # create a map (dictionary) of cells and values
-    for a in range(0, df_для_записи.shape[0]):
-        for b in range(0, df_для_записи.shape[1]):
-            smalllist = []
-            smalllist.append(a)
-            smalllist.append(b)
-            smalllist.append(df_для_записи.iloc[a,b])
-            cellvallist.append(smalllist)
-    # print(cellvallist)
-    celldict_new = {}
-    for element in cellvallist:
-        cellcoord = openpyxl.utils.get_column_letter(element[1]+1+coltostartin_pd) + str(element[0]+1+rowtostartin_pd)
-        cellval = element[2]
-        celldict_new.setdefault(cellcoord, cellval)
-    # print("celldict_new")
-    # pprint.pprint(celldict_new)
-    # sys.exit()
-    celldict = celldict_new
-
-    # WORKING WITH DESTINATION FILE---------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # loading wb
-    wb = openpyxl.load_workbook(filename)
-    ws = wb[разновидность]
-    rowmax = ws.max_row + 1
-
-    if clearing_marker != "не удалять":
-        # calculating end row for clearing
-        condition = 1
-        for i in range(rowtostartin_pd+1, rowmax + 1):
-            while condition==1:
-                # list1 = list(range(rowtostartin_pd+1, rowmax + 1))
-                # print(list1)
-                searchvalue = str(ws.cell(row = i, column = clearing_marker_col).value)
-                # print(i)
-                # print(searchvalue)
-                if searchvalue == clearing_marker:
-                    endrowforclearing = i-clearing_offset
-                    condition = 0
-                break
-        # print(endrowforclearing)
-        
-        # clearing cells and removing borders
-        if clearing_marker == "удалить все":
-            endrowforclearing = rowmax + 1
-            # print(endrowforclearing)
-            # sys.exit()
-        op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(endrowforclearing)])
-        for rowsofcells in op_tuple:
-            for cellsinrows in rowsofcells:
-                # print(cellsinrows.coordinate)
-                cellsinrows.value = ""
-                if remove_borders == 1:
-                    ws[cellsinrows.coordinate].border = noborder
-    
-    # transferring values from celldict and styling
-    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd)])
-    for rowsofcells in op_tuple:
-        for cellsinrows in rowsofcells:
-            for k in celldict.keys():
-                if cellsinrows.coordinate == k:
-                    # print(celldict[k])
-                    cellsinrows.value = celldict[k]
-                    if change_alignment == 1:
-                        ws[cellsinrows.coordinate].alignment = h_left_v_center
-                    if add_borders == 1:
-                        ws[cellsinrows.coordinate].border = allborders
-    celldict = {}
-    
-    # changing font-----------------------------------------------------------------------------------------------------------------------------------------------------
-    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + font_change_scope)])
-    for rowsofcells in op_tuple:
-        for cellsinrows in rowsofcells:
-            ws[cellsinrows.coordinate].font = font_arial10
-            """
-            if cellsinrows.value == "Начальник отдела по работе с персоналом":
-                ws[cellsinrows.coordinate].font = font_arial12_bold
-            if cellsinrows.value == "И. В. Маклаков" or cellsinrows.value == "Ю. С. Ткаченко":
-                ws[cellsinrows.coordinate].font = font_arial12_bold
-            """
-    # adjusting row height-----------------------------------------------------------------------------------------------------------------------------------------------------
-    """
-    cell_height_1 = 35
-    cell_height_2 = 15.75
-    for i in range(rowtostartin_pd + 1, rowtostartin_pd + 1 + rownumtoadd): # from start to before row ВСЕГО
-        ws.row_dimensions[i].height = cell_height_1
-    for i in range(rowtostartin_pd + 1 + rownumtoadd, rowmax): # from row ВСЕГО downwards
-        ws.row_dimensions[i].height = cell_height_2
-    """
-
-    # AGGREGATE ROW-----------------------------------------------------------------------------------------------------------------------------------------------------
-    if aggr_row==1:
-        всего_colnum = coltostartin_pd + 1 + colnumtoadd - всего_colnum_offset
-        # removing row number of ВСЕГО column
-        if всего_colnum != 1: # если ВСЕГО не в 1ой колонке, т.е. если в 1ой колонке идет нумерация
-            rowmax = ws.max_row + 1
-            for i in range(1, rowmax):
-                searchvalue = ws.cell(row = i, column = всего_colnum).value
-                if searchvalue in agg_row_names:
-                    ws.cell(row = i, column = coltostartin_pd + 1).value = "" # делаем пустой 1ую ячейку в аггрегатной строке
-        
-        # changing font, borders and alignment for aggregate row
-        rowmax = ws.max_row + 1
-        for i in range(1, rowmax):
-            searchvalue = ws.cell(row = i, column = всего_colnum).value
-            if searchvalue in agg_row_names:
-                # ws.cell(row = i, column = всего_colnum).font = font_arial12_bold # по идее это лишнее
-                ws.cell(row = i, column = всего_colnum).alignment = horizontal_right
-                for b in range(0, всего_colnum_offset + 1):
-                    ws.cell(row = i, column = всего_colnum + b).font = font_arial12_bold
-                if всего_colnum != 1:
-                    for b in range(1, всего_colnum):
-                        # ws.cell(row = i, column = всего_colnum - b).border = noleftborder
-                        ws.cell(row = i, column = всего_colnum - b).border = noLBborder
-
-    # РАЗНОВИДНОСТИ-----------------------------------------------------------------------------------------------------------------------------------------------------
-    # adding values to cells below table (not a fixed position, conditional on dataframe size)
-    if разновидность in разновидность_тип1:
-        ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 3)].value = "Начальник отдела компенсаций и льгот"
-        ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 5)].value = "Специалист по компенсациям и льготам"
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - неприказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 3)].value = "Харченко М. Н."
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - неприказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 3)].alignment = horizontal_right
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - неприказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 5)].value = "Потапов Д. В."
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - неприказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 5)].alignment = horizontal_right
-    if разновидность == "приказ":
-        ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 6)].value = "Руководитель Службы управления персоналом ФБГ"
-        ws[startcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + 6)].font = font_arial12_bold
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - приказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].value = "Яковенко А.В."
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - приказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].alignment = horizontal_right
-        ws[openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd - приказ_belowtablenames_offset) + str(rowtostartin_pd + 1 + rownumtoadd + 6)].font = font_arial12_bold
-    
-    # БФС ВЫРАЩИВАНИЕ ДОРАЩИВАНИЕ - УВОЛЕННЫЕ
-    if разновидность == "основные" or разновидность == "вспомогательные":
-        for i in range(1, rowmax):
-            searchvalue = ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd).value
-            if searchvalue == "Уволен" or searchvalue == "Увольнение":
-                ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - 1).value = "Увольнение"
-                for b in range(1, coltostartin_pd + 1 + colnumtoadd):
-                    ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - b).font = font_arial12_grey
-    
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # SAVING CHANGES-----------------------------------------------------------------------------------------------------------------------------------------------------
     wb_save_openpyxl(wb, filename)
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1046,313 +1114,7 @@ def rawdata_plr(inp0, inp1, inp2, inp3, inp4, openpyxl, USERPROFILE):
         print("\nsomeone is missing in t-13")
         sys.exit()
     # print("\nDone processing raw data t-13")
-# -------------------------------------------------------------------------------------------------------------------------------------------------------
-
-def БФС_подразделения(dataframe_list):
-    import numpy as np
-    for df_from_excel in dataframe_list:
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # ОП
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Кормопроизводственный комплекс"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Производственно-техническая лаборатория"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Элеватор"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад готовой продукции"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад товарно-материальных ценностей"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Комбикормовое производство \"Шебекинское\""), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба продаж"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба охраны труда"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба закупок"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Административный отдел"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Административно-хозяйственный отдел"), ["ОП"]] = "Административно-хозяйственный отдел"
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба безопасности"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел по работе с персоналом"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Складское хозяйство"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад товарно-материальных ценностей"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Фельдшерская служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Цех глубокой переработки"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба ветеринарно-санитарного контроля"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Птицеперерабатывающий цех"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел складского хозяйства"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад готовой продукции"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Цех технических фабрикатов"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Инженерно-техническая служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Птицеперерабатывающий комплекс"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел качества"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Автотранспортная служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Автотранспортная колонна"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел безопасности дорожного движения"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел эксплуатации"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ремонтная служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Центральный склад"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Администрация"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел производственного учета"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Централизованная сервисная"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба по в"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба подг"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ветеринарная служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Инкубаторий"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Площадка"), ["ОП"]] = df_from_excel["должность"]
-        # Инженерно-техническая служба
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Газовая служба"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел капитального строительства"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел экологии"), ["ОП"]] = df_from_excel["должность"]
-        # Служба безопасности
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел внутреннего контроля"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел режима и охраны"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел экономической безопасности"), ["ОП"]] = df_from_excel["должность"]
-        # Служба закупок
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел закупок сырья"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел закупок ресурсоемкого сырья и материалов"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел закупок вспомогательного сырья и материалов"), ["ОП"]] = df_from_excel["должность"]
-        # Служба продаж
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Магазин \"Поляна\""), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел закупок и реализации нетоварной группы"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел клиентского сервиса"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел оптовых продаж В2В"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел сетевых продаж"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел складской логистики"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел транспортной логистики"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба продаж"), ["ОП"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба сетевых продаж"), ["ОП"]] = df_from_excel["должность"]
-        # 
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Элеваторный участок"), ["ОП"]] = np.nan
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # цех
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба главного механика"), ["цех"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба главного энергетика"), ["цех"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Цех р"), ["цех"]] = df_from_excel["должность"]
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # участок
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Участок"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("участок"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("отдел"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("служба"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад"), ["участок"]] = df_from_excel["должность"]
-        # df_from_excel.loc[df_from_excel["должность"].str.contains("склад"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Комбикормовое производство \"Шебекинское\""), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Элеватор"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Производственно-техническая л"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Кормопроизводственный комплекс"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Цех технических фабрикатов"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Цех глубокой переработки"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Птицеперерабатывающий цех"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Холодильно-компрессорный цех"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Очистные сооружения"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Котельная"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Весовая"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Магазин \"Поляна\""), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба безопасности"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел по работе с персоналом"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Птицеперерабатывающий комплекс"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Технический и вспомог"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба отлова"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Бригада подготовки ко"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел качества"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ветеринарная лаборатория"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Автотранспортная служба"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Автобусный парк"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел безопасности дорожного движения"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел эксплуатации"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Группа диспетчеризации"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ремонтная служба"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Центральный склад"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Администрация"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Склад по хранению ветеринарных препаратов"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел производственного учета"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Централизованная сервисная"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба по в"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба подг"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ветеринарная служба"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Яйцесклад"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Столовая"), ["участок"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Ветеринарная аптека"), ["участок"]] = df_from_excel["должность"]
-        # 
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Начальник отдела"), ["участок"]] = np.nan
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Заместитель начальника отдела"), ["участок"]] = np.nan
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Руководитель отдела"), ["участок"]] = np.nan
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # подразд
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба закупок"), ["подразд"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Служба охраны труда"), ["подразд"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Административный отдел"), ["подразд"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Административно-хозяйственный отдел"), ["подразд"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Отдел по работе с персоналом"), ["подразд"]] = df_from_excel["должность"]
-        df_from_excel.loc[df_from_excel["должность"].str.contains("Администрация"), ["подразд"]] = df_from_excel["должность"]
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        list2 = [
-            "Служба по воспроизводству бройлеров",
-            "Служба по выращиванию бройлеров",
-            "Автотранспортная служба",
-            "Отдел качества",
-            "Птицеперерабатывающий комплекс",
-            "Инженерно-техническая служба",
-            "Отдел главного энергетика",
-            "Служба безопасности",
-            "Служба продаж",
-            "Кормопроизводственный цех",
-            "Кормопроизводственный комплекс",
-            "Производственно-техническая лаборатория",
-            "Автотранспортный участок отлова птицы",
-        ]
-        for n in list2:
-            list1 = df_from_excel[df_from_excel["должность"]==n].index.values
-            while True:
-                try:
-                    for i in list1:
-                        # Служба по выращиванию бройлеров - Автотранспортный участок отлова птицы
-                        if n == "Автотранспортный участок отлова птицы":
-                            for b in range(1, 100):
-                                if df_from_excel["должность"].iloc[i+b] == "Административно-хозяйственный отдел":
-                                    df_from_excel["ОП"].iloc[i+b] = np.nan
-                                    df_from_excel["подразд"].iloc[i+b] = np.nan
-                        # Птицеперерабатывающий комплекс
-                        if n == "Птицеперерабатывающий комплекс":
-                            if df_from_excel["должность"].iloc[i+1] == "Административно-хозяйственный отдел":
-                                df_from_excel["подразд"].iloc[i] = "ппк".upper()
-                                df_from_excel["подразд"].iloc[i+1] = np.nan
-                                df_from_excel["подразд"].iloc[i+2] = np.nan
-                                df_from_excel["ОП"].iloc[i+1] = "Административно-хозяйственный отдел"
-                                df_from_excel["ОП"].iloc[i+2] = "Административно-хозяйственный отдел"
-                        # Кормопроизводственный комплекс
-                        if n == "Кормопроизводственный комплекс":
-                            if df_from_excel["должность"].iloc[i+1] == "Административно-хозяйственный отдел":
-                                df_from_excel["подразд"].iloc[i] = "кормопроизводство".upper()
-                                df_from_excel["подразд"].iloc[i+1] = np.nan
-                                df_from_excel["подразд"].iloc[i+2] = np.nan
-                                df_from_excel["ОП"].iloc[i+1] = "Административно-хозяйственный отдел"
-                                df_from_excel["ОП"].iloc[i+2] = "Административно-хозяйственный отдел"
-                        # Служба по воспроизводству бройлеров
-                        if n == "Служба по воспроизводству бройлеров":
-                            if df_from_excel["должность"].iloc[i+1] == "Ветеринарная служба":
-                                df_from_excel["подразд"].iloc[i] = "воспроизводство".upper()
-                        # Служба по выращиванию бройлеров
-                        if n == "Служба по выращиванию бройлеров":
-                            if df_from_excel["должность"].iloc[i+1] == "Ветеринарная служба":
-                                df_from_excel["подразд"].iloc[i] = "выращивание".upper()
-                        # Автотранспортная служба
-                        if n == "Автотранспортная служба":
-                            if df_from_excel["должность"].iloc[i+1] == "Автотранспортная колонна № 1":
-                                df_from_excel["подразд"].iloc[i] = "автотранспортная служба".upper()
-                        # Отдел качества
-                        if n == "Отдел качества":
-                            if df_from_excel["должность"].iloc[i+1] == "Ветеринарная лаборатория":
-                                df_from_excel["подразд"].iloc[i] = "отдел качества".upper()
-                        # Инженерно-техническая служба
-                        if n == "Инженерно-техническая служба":
-                            if df_from_excel["должность"].iloc[i+1] == "Служба продаж":
-                                df_from_excel["подразд"].iloc[i] = "инженерно-техническая служба".upper()
-                            if df_from_excel["должность"].iloc[i+1] == "Газовая служба":
-                                df_from_excel["подразд"].iloc[i] = "инженерно-техническая служба".upper()
-                            if df_from_excel["должность"].iloc[i+1] == "Отдел главного энергетика" or df_from_excel.должность.iloc[i+1] == "Механик":
-                                df_from_excel["ОП"].iloc[i] = "Инженерно-техническая служба (КК)"
-                                df_from_excel["участок"].iloc[i] = "Инженерно-техническая служба (КК)"
-                                df_from_excel["ОП"].iloc[i-1] = "Инженерно-техническая служба (КК)"
-                                df_from_excel["участок"].iloc[i-1] = "Инженерно-техническая служба (КК)"
-                            if df_from_excel["должность"].iloc[i+1] == "Отдел главного механика":
-                                df_from_excel["ОП"].iloc[i] = np.nan
-                                df_from_excel["цех"].iloc[i+1] = "Инженерно-техническая служба, Отдел главного механика"
-                            # ППК
-                            if df_from_excel["должность"].iloc[i+2] == "Отдел автоматизированных систем управления" or df_from_excel.должность.iloc[i+2] == "Главный инженер":
-                                df_from_excel["ОП"].iloc[i] = "Инженерно-техническая служба (ППК)"
-                                df_from_excel["участок"].iloc[i] = "Инженерно-техническая служба (ППК)"
-                                df_from_excel["ОП"].iloc[i+1] = "Инженерно-техническая служба (ППК)"
-                                df_from_excel["участок"].iloc[i+1] = "Инженерно-техническая служба (ППК)"
-                        # Отдел главного энергетика
-                        if n == "Отдел главного энергетика":
-                            if df_from_excel["должность"].iloc[i+1] == "Котельная":
-                                if df_from_excel["должность"].iloc[i-1] == "Главный инженер" or df_from_excel.должность.iloc[i-1] == "Инженерно-техническая служба" or df_from_excel.должность.iloc[i-1] == "Механик" or df_from_excel.должность.iloc[i-1] == "Слесарь-сантехник 6 разряда":
-                                    df_from_excel["цех"].iloc[i] = "Отдел главного энергетика"
-                                if df_from_excel["должность"].iloc[i-1] == "Слесарь-ремонтник" or df_from_excel.должность.iloc[i-1] == "Отдел главного механика" or df_from_excel["должность"].iloc[i-1] == "Электрогазосварщик" or df_from_excel["должность"].iloc[i-1] == "Оператор котельной":
-                                    df_from_excel["цех"].iloc[i] = "Инженерно-техническая служба, Отдел главного энергетика"
-                        # Служба безопасности
-                        if n == "Служба безопасности":
-                            if df_from_excel["должность"].iloc[i+1] == "Отдел внутреннего контроля":
-                                df_from_excel["подразд"].iloc[i] = "служба безопасности".upper()
-                        # Служба продаж
-                        if n == "Служба продаж":
-                            if df_from_excel["должность"].iloc[i+1] == "Магазин \"Поляна\"":
-                                df_from_excel["подразд"].iloc[i] = "служба продаж".upper()
-                        # Кормопроизводственный цех
-                        if n == "Кормопроизводственный цех":
-                            if df_from_excel["должность"].iloc[i+1] == "Начальник цеха" or df_from_excel.должность.iloc[i+1] == "Участок по производству комбикормов":
-                                if df_from_excel["должность"].iloc[i-1] == "Весовщик" or df_from_excel.должность.iloc[i-1] == "Весовая":
-                                    df_from_excel["ОП"].iloc[i] = "Кормопроизводственный цех"
-                                    df_from_excel["участок"].iloc[i] = "Кормопроизводственный цех"
-                            if df_from_excel["должность"].iloc[i+1] == "Весовая":
-                                if df_from_excel["должность"].iloc[i-1] == "Помощник руководителя" or df_from_excel.должность.iloc[i-1] == "Кормопроизводственный комплекс":
-                                    df_from_excel["ОП"].iloc[i] = "Кормопроизводственный цех"
-                                    df_from_excel["цех"].iloc[i] = ""
-                                    df_from_excel["участок"].iloc[i] = "Кормопроизводственный цех"
-                            if df_from_excel["должность"].iloc[i+1] == "Весовая":
-                                if df_from_excel["должность"].iloc[i-1] == "Начальник производства" or df_from_excel.должность.iloc[i-1] == "Комбикормовое производство \"Шебекинское\"" or df_from_excel["должность"].iloc[i-1] == "Техник по учету":
-                                    df_from_excel["ОП"].iloc[i] = np.nan
-                                    df_from_excel["цех"].iloc[i] = "Кормопроизводственный цех"
-                        # Производственно-техническая лаборатория
-                        if n == "Производственно-техническая лаборатория":
-                            if df_from_excel["должность"].iloc[i+1] == "Лаборант 1-й категории" or df_from_excel["должность"].iloc[i+1] == "Дезинфектор" or df_from_excel.должность.iloc[i+1] == "Элеваторный участок":
-                                if df_from_excel["должность"].iloc[i-1] == "Оператор пульта управления" or df_from_excel["должность"].iloc[i-1] == "Технолог" or df_from_excel.должность.iloc[i-1] == "Участок по производству комбикормов":
-                                    df_from_excel["ОП"].iloc[i] = np.nan
-                except IndexError:
-                    # print(i)
-                    pass
-                break
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        df_from_excel["ОП"] = df_from_excel["ОП"].fillna(method="ffill")
-        df_from_excel["цех"] = df_from_excel["цех"].fillna(method="ffill")
-        df_from_excel["участок"] = df_from_excel["участок"].fillna(method="ffill")
-        df_from_excel["подразд"] = df_from_excel["подразд"].fillna(method="ffill")
-        # 
-        участки_с_цехом = [
-            "Весовая",
-            "Участок по производству комбикормов",
-            "Участок электрообеспечения",
-            "Участок контрольно-измерительных приборов и автоматики",
-            "Участок водоснабжения и водоотведения",
-            "Отдел главного механика",
-            "Отдел главного энергетика",
-            # 
-            "Ветеринарный участок",
-            "Производственный участок",
-            "Ремонтно-эксплуатационный участок",
-            # 
-            "Служба главного механика",
-            "Участок обслуживания электропогрузчиков",
-            "Служба главного энергетика",
-            "Котельная",
-            "Очистные сооружения",
-            "Участок по эксплуатации систем электроснабжения",
-            "Холодильно-компрессорный цех",
-            ]
-        df_from_excel.loc[df_from_excel["участок"].apply(lambda x: x not in участки_с_цехом), ["цех"]] = np.nan
-        df_from_excel.loc[df_from_excel["подразд"] == "ВЫРАЩИВАНИЕ", ["цех"]] = np.nan
-        # 
-        df_from_excel["ОП"] = df_from_excel["ОП"].fillna("")
-        df_from_excel["цех"] = df_from_excel["цех"].fillna("")
-        df_from_excel["участок"] = df_from_excel["участок"].fillna("")
-        df_from_excel["подразд"] = df_from_excel["подразд"].fillna("")
-        
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # подразд2
-        df_from_excel["подразд2"] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"] + ", " + df_from_excel["участок"]
-        # df_from_excel.loc[df_from_excel["подразд2"].str.rsplit(", ").str[0] == df_from_excel["подразд2"].str.rsplit(", ").str[1], ["подразд2"]] = df_from_excel["ОП"]
-        df_from_excel.loc[df_from_excel["ОП"] == df_from_excel["участок"], ["подразд2"]] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"]
-
-        df_from_excel.loc[df_from_excel["цех"] != "", ["подразд2"]] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"] + ", " + df_from_excel["цех"] + ", " + df_from_excel["участок"]
-        df_from_excel.loc[df_from_excel["цех"] == df_from_excel["участок"], ["подразд2"]] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"] + ", " + df_from_excel["цех"]
-        
-        df_from_excel["ОП"] = df_from_excel["подразд"] + ", " + df_from_excel["ОП"]
-        # print("\ndf_from_excel")
-        # print(df_from_excel)
-        # sys.exit()
-# -------------------------------------------------------------------------------------------------------------------------------------------------------  
+# ------------------------------------------------------------------------------------------------------------------------------------------------------- 
 
 def za_tur_dataframe_exceptions(dataframe_list, inputs_list, inputs_list_exceptions_dict, x1, inp2):
     for df12 in dataframe_list:

@@ -60,8 +60,9 @@ filename1 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы
 filename2 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\контакт\\126 отчет\\" + str(inp1) + "\\" + month + "\\126.xlsx"
 filename3 = USERPROFILE + "\\Documents\\output.xlsx"
 filename4 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\история изменений ФИО\\" + str(inp1) + "\\" + month + "\\история изм ФИО.xlsx"
-filename5 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\разное\\функциональная структура\\2026\\06\\функциональная структура ФЛ.xlsx"
-filename6 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\demography\\2026\\06\\demography.xlsx"
+filename5 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\разное\\функциональная структура\\" + str(inp1) + "\\" + month + "\\функциональная структура ФЛ.xlsx"
+filename6 = "P:\\Documents\\ДБ\\СРП\\Компенсации и льготы\\Потапов Д\\отчеты\\ЗУП\\demography\\" + str(inp1) + "\\" + month + "\\demography.xlsx"
+filename7 = USERPROFILE + "\\Documents\\К расторжения_для записи.xlsx"
 
 # ------------------------------------------------------------------ database URIs
 # sql_username = getpass.getuser()
@@ -414,16 +415,15 @@ df_dogovory_long = df_dogovory_long.join(df_demography, left_on=pl.col("ФИО_�
 # df_dogovory_long.write_excel(filename3)
 # sys.exit()
 df_dogovory_long = df_dogovory_long.select("Номер договора", "Кто продал", "Статус договора лизинга", "Должность", "ФИО", "ФИО_новое", "Social_number")
+# ПРОВЕРКА
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 
 # df2tables.render(df_dogovory_long)
 # _my_functions.view_itables_html(df=df_dogovory_long)
-df_dogovory_long.write_excel(filename3)
-sys.exit()
 df_dogovory_long = df_dogovory_long.unique(subset=["Номер договора", "Кто продал", "Статус договора лизинга", "ФИО", "ФИО_новое", "Social_number"])
-
 # вар2 - разделить на основные продажи и лДРП, в лДРП оставить только должность Д регионы
 # df_dogovory_long.write_excel(filename3)
+# sys.exit()
 
 # ------------------------------------------------------------------ отбор работников, по которым менялось ФИО
 """
@@ -515,12 +515,14 @@ _my_functions.print_line("hyphens")
 print(df_koeff)
 
 df_koeff.write_excel(filename3)
-sys.exit()
+# sys.exit()
 
 # ------------------------------------------------------------------ добавление коэффициента расторжений
 df_koeff_itog = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
+# ПРОВЕРКИ
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("коэфф_р").is_null())
+#
 df_koeff_itog = df_koeff_itog.filter(pl.col("ФИО").is_not_null())
 df_koeff_itog = df_koeff_itog.group_by(["Social_number", "ФИО_новое"]).agg(
         pl.col("всего договоров").mean().alias("всего договоров"),
@@ -537,7 +539,6 @@ df_koeff_itog = df_koeff_itog.sort(["Social_number"])
 
 df_koeff_itog.write_excel(filename3)
 sys.exit()
-
 
 # ------------------------------------------------------------------ загрузка функциональной структуры
 df_struktura = pl.read_excel(
@@ -557,7 +558,7 @@ print(df_struktura)
 df_koeff_itog = df_koeff_itog.join(df_struktura, left_on="ФИО_новое", right_on="ФИО менеджера", how="left")
 df_koeff_itog.write_excel(filename3)
 
-sys.exit()
+# sys.exit()
 
 # ------------------------------------------------------------------ дополнительный лист - портфель
 df_portfel = df_dogovory_long.filter((pl.col("Статус договора лизинга") == "Расторгнут") & (pl.col("ФИО").is_not_null()))
@@ -587,3 +588,25 @@ df_rasshifrovka = df_rasshifrovka.with_columns(
 )
 df_rasshifrovka = df_rasshifrovka.select("Кто продал", "Номер договора", "Дата договора лизинга", "Статус договора лизинга", "Дата расторжения", "Social_number", "ФИО", "ФИО_новое", "Должность", "Статус", "Тип", "Роль")
 df_rasshifrovka.write_excel(filename3)
+sys.exit()
+
+_my_functions.df_to_excel_openpyxl(
+    df_library = "polars",
+    wb_name = filename7,
+    sheet_name = "Расшифровка",
+    df_для_записи = df_rasshifrovka,
+    rowtostartin_pd = 0,
+    coltostartin_pd = 0,
+    aggr_row = 0, # 1 - добавяет итоговую строку, 0 - не добавляет
+    всего_colnum_offset = 1, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
+    below_table = 0, # 1 - добавляет значения (в зависимости от разновиднотси) ниже dataframe, 0 - только dataframe
+    below_table_offset_не_приказ = 0,
+    below_table_offset_приказ = 0,
+    clearing_marker = "удалить все", # "не удалять" или любое другое значение
+    clearing_marker_col = 1, # openpyxl column, not pandas column - so basically it equals excel col number
+    clearing_offset = 1, # rownum of clearing marker - rownum of first row you don't want to clear + 1
+    remove_borders = 1, # whether or not to remove borders within clearing range (1-yes, 0-no)
+    change_alignment = 0, # 1 - меняет выравнивание, 0 - не меняет 
+    add_borders = 0, # 1 - добавяет границы, 0 - не добавляет
+    font_change_scope = 0, # на сколько строк вниз после окончания dataframe менять шрифт, минимальное значение 0
+    )
