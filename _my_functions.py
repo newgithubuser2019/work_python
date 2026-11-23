@@ -6,7 +6,8 @@ import webbrowser
 import itables
 import openpyxl
 from itables import to_html_datatable
-from concurrent.futures import ProcessPoolExecutor
+import itertools
+# from concurrent.futures import ProcessPoolExecutor
 
 
 # -------------------------------------------------------------------NOTES
@@ -91,7 +92,7 @@ def df_to_excel_openpyxl(
     below_table, # 1 - добавляет значения (в зависимости от sheet_name) ниже dataframe, 0 - только dataframe
     below_table_offset_не_приказ,
     below_table_offset_приказ,
-    clearing_marker, # "не удалять" или любое другое значение
+    clearing_marker, # "не удалять", "удалить все" или любое другое значение
     clearing_marker_col, # openpyxl column, not pandas column - so basically it equals excel col number
     clearing_offset, # rownum of clearing marker - rownum of first row you don't want to clear + 1
     remove_borders, # whether or not to remove borders within clearing range (1-yes, 0-no)
@@ -102,12 +103,13 @@ def df_to_excel_openpyxl(
     """
     This is a function for writing into existing excel files
     Steps:
-    declaring DEFAULT INPUTS
-    creating STYLE OBJECTS
-    calculating DEPENDING VARIABLES
-    creating a map (dictionary) of cells and values
-    WORKING WITH DESTINATION FILE
-    SAVING CHANGES
+    declaring default variables
+    creating format objects
+    calculating depending variables
+    removing old data
+    writing new data
+    applying format changes
+    saving workbook
     """
     # ------------------------------------------------------------------ declaring default variables
     cellvallist = []
@@ -115,6 +117,8 @@ def df_to_excel_openpyxl(
     endrowforclearing = ""
     agg_row_names = ["Всего:", "ВСЕГО:", "Всего", "ВСЕГО", "Итого:", "ИТОГО:", "Итого", "ИТОГО"]
 
+    # ------------------------------------------------------------------ APPLYING FORMAT CHANGES
+    # ------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------ creating font objects
     # times new roman
     font_TMR11 = openpyxl.styles.Font(name = "Times New Roman", size = 11)
@@ -159,7 +163,7 @@ def df_to_excel_openpyxl(
                     bottom=openpyxl.styles.Side(border_style=None, color="FF000000"),
                     )
     
-    # ------------------------------------------------------------------ calculating depending variables
+    # ------------------------------------------------------------------ CALCULATING DEPENDING VARIABLES
     df_shape = df_для_записи.shape
     # print(df_shape)
     rownumtoadd = df_shape[0] - 1
@@ -168,6 +172,7 @@ def df_to_excel_openpyxl(
     endcellLetter_op = openpyxl.utils.get_column_letter(coltostartin_pd + 1 + colnumtoadd)
     
     # ------------------------------------------------------------------ creating a dictionary of cells and values
+    """
     for a in range(0, df_для_записи.shape[0]):
         for b in range(0, df_для_записи.shape[1]):
             smalllist = []
@@ -179,6 +184,7 @@ def df_to_excel_openpyxl(
                 smalllist.append(df_для_записи[a, b])
             cellvallist.append(smalllist)
     # print(cellvallist)
+
     celldict_new = {}
     for element in cellvallist:
         cellcoord = openpyxl.utils.get_column_letter(element[1]+1+coltostartin_pd) + str(element[0]+1+rowtostartin_pd)
@@ -187,17 +193,18 @@ def df_to_excel_openpyxl(
     # print("celldict_new")
     # pprint.pprint(celldict_new)
     # sys.exit()
+    
     celldict = celldict_new
+    """
 
-    # ------------------------------------------------------------------ loading workbook
-    print("loading workbook")
+    # ------------------------------------------------------------------ REMOVING OLD DATA
+    print("removing old data")
+
     wb = openpyxl.load_workbook(wb_name)
     ws = wb[sheet_name]
     rowmax = ws.max_row + 1
     # print(str(rowmax))
 
-    # ------------------------------------------------------------------ removing old data
-    print("removing old data")
     if clearing_marker != "не удалять":
         # calculating end row for clearing
         condition = 1
@@ -212,105 +219,75 @@ def df_to_excel_openpyxl(
                     endrowforclearing = i-clearing_offset
                     condition = 0
                 break
-        # print(endrowforclearing)
         
-        # clearing cells and removing borders
         if clearing_marker == "удалить все":
             endrowforclearing = rowmax + 1
-            # print(endrowforclearing)
-            # sys.exit()
-        op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(endrowforclearing)])
-        """
-        def openpyxl_delete_value():
-            for rowsofcells in op_tuple:
-                for cellsinrows in rowsofcells:
-                    # print(cellsinrows.coordinate)
-                    # print(cellsinrows.value)
-                    cellsinrows.value = ""
-                    if remove_borders == 1:
-                        ws[cellsinrows.coordinate].border = noborder
-        # print(f"Текущее значение __name__ это: {__name__}")
+        # print(endrowforclearing)
 
-        if __name__ == '_my_functions':
-            with ProcessPoolExecutor() as executor:
-                executor.map(openpyxl_delete_value)
+        # clearing cells and removing borders
+        # op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(endrowforclearing)])
+       
+        print(rowtostartin_pd + 1)
+        print(endrowforclearing)
+        # sys.exit()
+
+        ws.delete_rows(idx=rowtostartin_pd + 1, amount=endrowforclearing-rowtostartin_pd - 1)
         """
-        for rowsofcells in op_tuple:
-            for cellsinrows in rowsofcells:
-                # print(cellsinrows.coordinate)
-                # print(cellsinrows.value)
-                cellsinrows.value = ""
-                if remove_borders == 1:
-                    ws[cellsinrows.coordinate].border = noborder
+        for coord in list(ws._cells.keys()):
+            if ws._cells[coord].value is None:
+                del ws._cells[coord]
+        """
+        print(ws.max_row)
+        wb_save_openpyxl(wb, wb_name)
+        # sys.exit()
+
+    # ------------------------------------------------------------------ WRITING NEW DATA
+    # -----------------------------------------------------------------------------------
+    # ------------------------------------------------------------------ writing dataframe
+    print("writing new values and applying styles")
+    wb = openpyxl.load_workbook(wb_name)
+    ws = wb[sheet_name]
+    rowmax = ws.max_row + 1
+    # print(str(rowmax))
     
-    # ------------------------------------------------------------------ transferring values from celldict and applying styles
-    print("transferring values from celldict and applying styles")
     op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd)])
     """
-    def openpyxl_write_df():
-        for rowsofcells in op_tuple:
-                for cellsinrows in rowsofcells:
-                    for k in celldict.keys():
-                        if cellsinrows.coordinate == k:
-                            cellsinrows.value = celldict[k]
-                            if change_alignment == 1:
-                                ws[cellsinrows.coordinate].alignment = h_left_v_center
-                            if add_borders == 1:
-                                ws[cellsinrows.coordinate].border = allborders
-                            print(k)
-                            # print(celldict[k])
-    
-    
-    if __name__ == '_my_functions':
-        print("yes")
-        with ProcessPoolExecutor() as executor:
-            executor.map(lambda _: openpyxl_write_df, op_tuple)
-    
-    # import multiprocessing
-    # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        # pool.map(openpyxl_write_df, op_tuple)
+    for coord in list(ws._cells.keys()):
+        if ws._cells[coord].value is None:
+            del ws._cells[coord]
     """
-    """
-    # if __name__ == '_my_functions':
-            # with ProcessPoolExecutor() as executor:
-    for rowsofcells in op_tuple:
-        for cellsinrows in rowsofcells:
-            for k in celldict.keys():
-                if cellsinrows.coordinate == k:
-                    cellsinrows.value = celldict[k]
-                    if change_alignment == 1:
-                        ws[cellsinrows.coordinate].alignment = h_left_v_center
-                    if add_borders == 1:
-                        ws[cellsinrows.coordinate].border = allborders
-                    # print(k)
-                    # print(celldict[k])
     
-    celldict = {}
-    """
-    for row in df_для_записи.iter_rows():
-        # print(row)
-        ws.append(list(row))
+    ws_temp = wb.create_sheet("temp_sheet")
 
-    # ------------------------------------------------------------------ changing font
-    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + font_change_scope)])
-    for rowsofcells in op_tuple:
-        for cellsinrows in rowsofcells:
-            ws[cellsinrows.coordinate].font = font_arial10
-            """
-            if cellsinrows.value == "Начальник отдела по работе с персоналом":
-                ws[cellsinrows.coordinate].font = font_arial12_bold
-            if cellsinrows.value == "И. В. Маклаков" or cellsinrows.value == "Ю. С. Ткаченко":
-                ws[cellsinrows.coordinate].font = font_arial12_bold
-            """
-    # ------------------------------------------------------------------ adjusting row height
-    """
-    cell_height_1 = 35
-    cell_height_2 = 15.75
-    for i in range(rowtostartin_pd + 1, rowtostartin_pd + 1 + rownumtoadd): # from start to before row ВСЕГО
-        ws.row_dimensions[i].height = cell_height_1
-    for i in range(rowtostartin_pd + 1 + rownumtoadd, rowmax): # from row ВСЕГО downwards
-        ws.row_dimensions[i].height = cell_height_2
-    """
+    data_stream = itertools.chain([df_для_записи.columns], df_для_записи.iter_rows(named=False))
+    for row in data_stream:
+        # print(row)
+        ws_temp.append(list(row))
+    
+    for row in ws_temp.iter_rows():
+        for cell in row:
+            # Match the exact coordinate (e.g., 'A1' from source goes to 'A1' in destination)
+            ws[cell.coordinate].value = cell.value
+    
+    # adjusting column width
+    from openpyxl.utils import get_column_letter
+    for col in ws_temp.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        # print(col_letter)
+        for cell in col:
+            if cell.value is not None:
+                val_str = str(cell.value)
+                cell_len = max(len(line) for line in val_str.split('\n'))
+                max_len = max(max_len, cell_len)
+        ws_temp.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+    wb.remove(ws_temp)
+    
+    # celldict = {}
+    
+    wb_save_openpyxl(wb, wb_name)
+    # sys.exit()
 
     # ------------------------------------------------------------------ adding aggregate row
     if aggr_row==1:
@@ -362,9 +339,33 @@ def df_to_excel_openpyxl(
                     ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - 1).value = "Увольнение"
                     for b in range(1, coltostartin_pd + 1 + colnumtoadd):
                         ws.cell(row = i, column = coltostartin_pd + 1 + colnumtoadd - b).font = font_arial12_grey
+
+    # ------------------------------------------------------------------ APPLYING FORMAT CHANGES
+    # ------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------ changing font
+    op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd + font_change_scope)])
+    for rowsofcells in op_tuple:
+        for cellsinrows in rowsofcells:
+            ws[cellsinrows.coordinate].font = font_arial10
+            """
+            if cellsinrows.value == "Начальник отдела по работе с персоналом":
+                ws[cellsinrows.coordinate].font = font_arial12_bold
+            if cellsinrows.value == "И. В. Маклаков" or cellsinrows.value == "Ю. С. Ткаченко":
+                ws[cellsinrows.coordinate].font = font_arial12_bold
+            """
+    # ------------------------------------------------------------------ adjusting row height
+    """
+    cell_height_1 = 35
+    cell_height_2 = 15.75
+    for i in range(rowtostartin_pd + 1, rowtostartin_pd + 1 + rownumtoadd): # from start to before row ВСЕГО
+        ws.row_dimensions[i].height = cell_height_1
+    for i in range(rowtostartin_pd + 1 + rownumtoadd, rowmax): # from row ВСЕГО downwards
+        ws.row_dimensions[i].height = cell_height_2
+    """
     
-    # ------------------------------------------------------------------ saving changes
+    # ------------------------------------------------------------------ SAVING CHANGES
     wb_save_openpyxl(wb, wb_name)
+
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
 
 def rawdata_pererabotka(квартал, USERPROFILE, inp0, inp1, inp2, inp2a, inp3, monthsdict, openpyxl):
