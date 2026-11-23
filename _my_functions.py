@@ -72,21 +72,15 @@ def openpyxl_write_df(t):
 # -------------------------------------------------------------------------------------------------------------------------------------------------------
 """
 def df_to_excel_openpyxl(
-    # Border,
-    # Side,
-    # Alignment,
-    # Font,
-    # get_column_letter,
-    # openpyxl,
-    # pprint,
-    # pd,
-    #
     df_library, # polars or pandas
+    # ---
     wb_name,
     sheet_name,
     df_для_записи,
+    # df_and_sheet_names,
     rowtostartin_pd,
     coltostartin_pd,
+    # ---
     aggr_row, # 1 - добавяет итоговую строку, 0 - не добавляет
     всего_colnum_offset, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
     below_table, # 1 - добавляет значения (в зависимости от sheet_name) ниже dataframe, 0 - только dataframe
@@ -164,6 +158,14 @@ def df_to_excel_openpyxl(
                     )
     
     # ------------------------------------------------------------------ CALCULATING DEPENDING VARIABLES
+    # for sheet_name, df_для_записи in df_and_sheet_names.items():
+    print("\n------------------------------------------------------------------------------------------------------------------------")
+    print("Запись в excel")
+    print(wb_name)
+    print(sheet_name)
+    print("\n")
+    print(df_для_записи.head())
+
     df_shape = df_для_записи.shape
     # print(df_shape)
     rownumtoadd = df_shape[0] - 1
@@ -226,9 +228,9 @@ def df_to_excel_openpyxl(
 
         # clearing cells and removing borders
         # op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(endrowforclearing)])
-       
-        print(rowtostartin_pd + 1)
-        print(endrowforclearing)
+    
+        # print(rowtostartin_pd + 1)
+        # print(endrowforclearing)
         # sys.exit()
 
         ws.delete_rows(idx=rowtostartin_pd + 1, amount=endrowforclearing-rowtostartin_pd - 1)
@@ -237,19 +239,19 @@ def df_to_excel_openpyxl(
             if ws._cells[coord].value is None:
                 del ws._cells[coord]
         """
-        print(ws.max_row)
+        # print(ws.max_row)
         wb_save_openpyxl(wb, wb_name)
         # sys.exit()
 
     # ------------------------------------------------------------------ WRITING NEW DATA
     # -----------------------------------------------------------------------------------
     # ------------------------------------------------------------------ writing dataframe
-    print("writing new values and applying styles")
+    print("writing new data and applying styles")
     wb = openpyxl.load_workbook(wb_name)
     ws = wb[sheet_name]
     rowmax = ws.max_row + 1
     # print(str(rowmax))
-    
+
     op_tuple = tuple(ws[startcellLetter_op + str(rowtostartin_pd + 1):endcellLetter_op + str(rowtostartin_pd + 1 + rownumtoadd)])
     """
     for coord in list(ws._cells.keys()):
@@ -263,24 +265,27 @@ def df_to_excel_openpyxl(
     for row in data_stream:
         # print(row)
         ws_temp.append(list(row))
+        # ws.append(list(row)) # не работает из-за неправильного определения последней строки
     
     for row in ws_temp.iter_rows():
+        # ws.append(list(row))
         for cell in row:
             # Match the exact coordinate (e.g., 'A1' from source goes to 'A1' in destination)
             ws[cell.coordinate].value = cell.value
     
-    # adjusting column width
+    # adjusting column width and adding borders
     from openpyxl.utils import get_column_letter
-    for col in ws_temp.columns:
+    for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
         # print(col_letter)
         for cell in col:
+            ws[cell.coordinate].border = allborders
             if cell.value is not None:
                 val_str = str(cell.value)
                 cell_len = max(len(line) for line in val_str.split('\n'))
                 max_len = max(max_len, cell_len)
-        ws_temp.column_dimensions[col_letter].width = max(max_len + 3, 11)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 11)
 
     wb.remove(ws_temp)
     
