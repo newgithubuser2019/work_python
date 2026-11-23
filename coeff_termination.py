@@ -514,10 +514,10 @@ df_koeff = df_koeff.rename({
 _my_functions.print_line("hyphens")
 print(df_koeff)
 
-df_koeff.write_excel(filename3)
+# df_koeff.write_excel(filename3)
 # sys.exit()
 
-# ------------------------------------------------------------------ добавление коэффициента расторжений
+# ------------------------------------------------------------------ добавление снилс в коэфф расторжений
 df_koeff_itog = df_dogovory_long.join(df_koeff, on="Social_number", how="left")
 # ПРОВЕРКИ
 # df_dogovory_long = df_dogovory_long.filter(pl.col("ФИО").is_not_null() & pl.col("Social_number").is_null())
@@ -538,7 +538,7 @@ df_koeff_itog = df_koeff_itog.sort(["Social_number"])
 # _my_functions.view_itables_html(df=df_dogovory_long)
 
 df_koeff_itog.write_excel(filename3)
-sys.exit()
+# sys.exit()
 
 # ------------------------------------------------------------------ загрузка функциональной структуры
 df_struktura = pl.read_excel(
@@ -588,14 +588,14 @@ df_rasshifrovka = df_rasshifrovka.with_columns(
 )
 df_rasshifrovka = df_rasshifrovka.select("Кто продал", "Номер договора", "Дата договора лизинга", "Статус договора лизинга", "Дата расторжения", "Social_number", "ФИО", "ФИО_новое", "Должность", "Статус", "Тип", "Роль")
 df_rasshifrovka.write_excel(filename3)
-sys.exit()
+# sys.exit()
 
 _my_functions.df_to_excel_openpyxl(
     df_library = "polars",
     wb_name = filename7,
     sheet_name = "Расшифровка",
     df_для_записи = df_rasshifrovka,
-    rowtostartin_pd = 0,
+    rowtostartin_pd = 1,
     coltostartin_pd = 0,
     aggr_row = 0, # 1 - добавяет итоговую строку, 0 - не добавляет
     всего_colnum_offset = 1, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
@@ -606,7 +606,7 @@ _my_functions.df_to_excel_openpyxl(
     clearing_marker_col = 1, # openpyxl column, not pandas column - so basically it equals excel col number
     clearing_offset = 1, # rownum of clearing marker - rownum of first row you don't want to clear + 1
     remove_borders = 1, # whether or not to remove borders within clearing range (1-yes, 0-no)
-    change_alignment = 0, # 1 - меняет выравнивание, 0 - не меняет 
-    add_borders = 0, # 1 - добавяет границы, 0 - не добавляет
+    change_alignment = 1, # 1 - меняет выравнивание, 0 - не меняет 
+    add_borders = 1, # 1 - добавяет границы, 0 - не добавляет
     font_change_scope = 0, # на сколько строк вниз после окончания dataframe менять шрифт, минимальное значение 0
     )
