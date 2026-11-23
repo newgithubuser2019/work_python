@@ -370,6 +370,7 @@ df_demography = df_demography.unique(subset=["ФИО полное"])
 # df_demography.write_excel(filename3)
 # sys.exit()
 """
+
 # из excel
 df_demography = pl.read_excel(
     # engine="openpyxl",
@@ -590,19 +591,74 @@ df_rasshifrovka = df_rasshifrovka.select("Кто продал", "Номер до
 df_rasshifrovka.write_excel(filename3)
 # sys.exit()
 
+# ------------------------------------------------------------------ запись в excel
+# К расторжения
 _my_functions.df_to_excel_openpyxl(
     df_library = "polars",
+    # ---
     wb_name = filename7,
-    sheet_name = "Расшифровка",
-    df_для_записи = df_rasshifrovka,
+    sheet_name = "К расторжения",
+    df_для_записи = df_koeff_itog,
+    # df_and_sheet_names,
     rowtostartin_pd = 1,
     coltostartin_pd = 0,
+    # ---
     aggr_row = 0, # 1 - добавяет итоговую строку, 0 - не добавляет
     всего_colnum_offset = 1, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
     below_table = 0, # 1 - добавляет значения (в зависимости от разновиднотси) ниже dataframe, 0 - только dataframe
     below_table_offset_не_приказ = 0,
     below_table_offset_приказ = 0,
-    clearing_marker = "удалить все", # "не удалять" или любое другое значение
+    clearing_marker = "удалить все", # "не удалять", "удалить все" или любое другое значение
+    clearing_marker_col = 1, # openpyxl column, not pandas column - so basically it equals excel col number
+    clearing_offset = 1, # rownum of clearing marker - rownum of first row you don't want to clear + 1
+    remove_borders = 1, # whether or not to remove borders within clearing range (1-yes, 0-no)
+    change_alignment = 1, # 1 - меняет выравнивание, 0 - не меняет 
+    add_borders = 1, # 1 - добавяет границы, 0 - не добавляет
+    font_change_scope = 0, # на сколько строк вниз после окончания dataframe менять шрифт, минимальное значение 0
+    )
+
+# Портфель для К расторжений
+_my_functions.df_to_excel_openpyxl(
+    df_library = "polars",
+    # ---
+    wb_name = filename7,
+    sheet_name = "Портфель для К расторжений",
+    df_для_записи = df_portfel,
+    # df_and_sheet_names,
+    rowtostartin_pd = 1,
+    coltostartin_pd = 0,
+    # ---
+    aggr_row = 0, # 1 - добавяет итоговую строку, 0 - не добавляет
+    всего_colnum_offset = 1, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
+    below_table = 0, # 1 - добавляет значения (в зависимости от разновиднотси) ниже dataframe, 0 - только dataframe
+    below_table_offset_не_приказ = 0,
+    below_table_offset_приказ = 0,
+    clearing_marker = "удалить все", # "не удалять", "удалить все" или любое другое значение
+    clearing_marker_col = 1, # openpyxl column, not pandas column - so basically it equals excel col number
+    clearing_offset = 1, # rownum of clearing marker - rownum of first row you don't want to clear + 1
+    remove_borders = 1, # whether or not to remove borders within clearing range (1-yes, 0-no)
+    change_alignment = 1, # 1 - меняет выравнивание, 0 - не меняет 
+    add_borders = 1, # 1 - добавяет границы, 0 - не добавляет
+    font_change_scope = 0, # на сколько строк вниз после окончания dataframe менять шрифт, минимальное значение 0
+    )
+
+# Расшифровка
+_my_functions.df_to_excel_openpyxl(
+    df_library = "polars",
+    # ---
+    wb_name = filename7,
+    sheet_name = "Расшифровка",
+    df_для_записи = df_rasshifrovka,
+    # df_and_sheet_names,
+    rowtostartin_pd = 1,
+    coltostartin_pd = 0,
+    # ---
+    aggr_row = 0, # 1 - добавяет итоговую строку, 0 - не добавляет
+    всего_colnum_offset = 1, # сдвиг на данное число влево от крайней правой колонки, чтобы указать ячейку, где будет стоять "ВСЕГО" (если ставить в крайнюю правую колонку, то 1)
+    below_table = 0, # 1 - добавляет значения (в зависимости от разновиднотси) ниже dataframe, 0 - только dataframe
+    below_table_offset_не_приказ = 0,
+    below_table_offset_приказ = 0,
+    clearing_marker = "удалить все", # "не удалять", "удалить все" или любое другое значение
     clearing_marker_col = 1, # openpyxl column, not pandas column - so basically it equals excel col number
     clearing_offset = 1, # rownum of clearing marker - rownum of first row you don't want to clear + 1
     remove_borders = 1, # whether or not to remove borders within clearing range (1-yes, 0-no)
